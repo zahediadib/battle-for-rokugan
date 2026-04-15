@@ -249,13 +249,21 @@ function GameContent() {
           {isHost && gameState.status === 'playing' && (
             <button
               data-testid="edit-mode-toggle"
-              onClick={() => setEditMode(!editMode)}
-              className={`flex items-center gap-1 px-3 py-1 rounded-sm text-xs font-bold uppercase tracking-wider transition-colors ${
-                editMode ? 'bg-[#F57C00] text-black' : 'bg-white/10 text-[#A1A1AA] hover:text-white'
+              onClick={() => {
+                if (editMode) {
+                  // Exiting edit mode - send any position changes
+                  sendAction({ action: 'edit_positions', positions: {} });
+                }
+                setEditMode(!editMode);
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-bold uppercase tracking-wider transition-all duration-300 ${
+                editMode
+                  ? 'bg-[#F57C00] text-black shadow-[0_0_12px_rgba(245,124,0,0.4)] ring-2 ring-[#F57C00]/50'
+                  : 'bg-white/10 text-[#A1A1AA] hover:text-white hover:bg-white/20'
               }`}
             >
               {editMode ? <Lock className="w-3.5 h-3.5" /> : <Move className="w-3.5 h-3.5" />}
-              {editMode ? 'Save & Exit Edit' : 'Edit Mode'}
+              {editMode ? 'Exit Edit' : 'Edit Mode'}
             </button>
           )}
           {connected ? <Wifi className="w-4 h-4 text-[#2E7D32]" /> : <WifiOff className="w-4 h-4 text-[#D32F2F]" />}
