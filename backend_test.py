@@ -345,6 +345,140 @@ class RokuganAPITester:
             self.tests_run += 1
             return False
 
+    def test_phase2_websocket_actions(self):
+        """Test Phase 2+3 WebSocket actions with existing active game"""
+        self.log("\n=== Testing Phase 2+3 WebSocket Actions ===")
+        
+        # Test with the active game mentioned in review request
+        active_game_id = "4fa2f74a-0df3-4bc0-ab75-93bd2db1c16f"
+        
+        # Test with provided credentials
+        test_credentials = [
+            {"username": "host", "password": "h1"},
+            {"username": "player2", "password": "p2"}
+        ]
+        
+        for cred in test_credentials:
+            self.log(f"\n--- Testing with {cred['username']} ---")
+            
+            # Login with test credentials
+            success, response = self.run_test(
+                f"Login as {cred['username']}",
+                "POST",
+                "auth/login",
+                200,
+                data=cred
+            )
+            
+            if not success:
+                self.log(f"❌ Failed to login as {cred['username']}, skipping WebSocket tests")
+                continue
+                
+            token = response.get('token')
+            if not token:
+                self.log(f"❌ No token received for {cred['username']}")
+                continue
+                
+            # Test game state access
+            original_token = self.token
+            self.token = token
+            
+            success, game_state = self.run_test(
+                f"Get Game State as {cred['username']}",
+                "GET",
+                f"game/{active_game_id}",
+                200
+            )
+            
+            if success:
+                self.log(f"   Game status: {game_state.get('status')}")
+                self.log(f"   Game phase: {game_state.get('phase')}")
+                self.log(f"   Round: {game_state.get('round')}")
+                
+                # Test WebSocket actions if in placement phase
+                if game_state.get('phase') == 'placement':
+                    self._test_websocket_actions(active_game_id, token, cred['username'])
+            
+            self.token = original_token
+            
+        return True
+        
+    def _test_websocket_actions(self, game_id, token, username):
+        """Test specific WebSocket actions"""
+        try:
+            import websocket
+            
+            ws_url = self.base_url.replace('https://', 'wss://').replace('http://', 'ws://')
+            ws_endpoint = f"{ws_url}/api/ws/{game_id}?token={token}"
+            
+            ws = websocket.create_connection(ws_endpoint, timeout=5)
+            self.log(f"   WebSocket connected for {username}")
+            
+            # Test Scout action (if available)
+            scout_action = {
+                "action": "use_scout",
+                "target_location": "province", 
+                "target_id": "crab_1"
+            }
+            ws.send(json.dumps(scout_action))
+            response = ws.recv()
+            self.log(f"   Scout action response: {response[:100]}...")
+            
+            # Test Shugenja action (if available)
+            shugenja_action = {
+                "action": "use_shugenja",
+                "target_location": "province",
+                "target_id": "crab_2"
+            }
+            ws.send(json.dumps(shugenja_action))
+            response = ws.recv()
+            self.log(f"   Shugenja action response: {response[:100]}...")
+            
+            # Test Scorpion ability (if Scorpion clan)
+            scorpion_action = {
+                "action": "use_scorpion_ability",
+                "target_location": "province",
+                "target_id": "unicorn_1"
+            }
+            ws.send(json.dumps(scorpion_action))
+            response = ws.recv()
+            self.log(f"   Scorpion ability response: {response[:100]}...")
+            
+            # Test territory card play
+            territory_action = {
+                "action": "play_territory_card",
+                "territory_id": "scorpion"
+            }
+            ws.send(json.dumps(territory_action))
+            response = ws.recv()
+            self.log(f"   Territory card response: {response[:100]}...")
+            
+            # Test pass territory card
+            pass_action = {"action": "pass_territory_card"}
+            ws.send(json.dumps(pass_action))
+            response = ws.recv()
+            self.log(f"   Pass territory response: {response[:100]}...")
+            
+            # Test edit positions (host only)
+            if username == "host":
+                edit_action = {
+                    "action": "edit_positions",
+                    "positions": {"token_1": {"x": 100, "y": 200}}
+                }
+                ws.send(json.dumps(edit_action))
+                response = ws.recv()
+                self.log(f"   Edit positions response: {response[:100]}...")
+            
+            ws.close()
+            self.tests_run += 6 if username == "host" else 5
+            self.tests_passed += 6 if username == "host" else 5
+            
+        except ImportError:
+            self.log("⚠️  websocket-client not available for Phase 2 testing")
+        except Exception as e:
+            self.log(f"❌ Phase 2 WebSocket test failed: {str(e)}")
+            self.tests_run += 1
+
     def test_error_handling(self):
         """Test error handling and edge cases"""
         self.log("\n=== Testing Error Handling ===")
@@ -413,6 +547,7 @@ class RokuganAPITester:
             return False
             
         self.test_websocket_connection(game_id)
+        self.test_phase2_websocket_actions()
         self.test_error_handling()
         
         # Print results

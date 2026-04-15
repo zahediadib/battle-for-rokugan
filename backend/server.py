@@ -356,7 +356,10 @@ async def websocket_endpoint(ws: WebSocket, game_id: str):
             success, message, updated_game = process_action(game, user_id, action)
 
             if success:
-                # Save to DB
+                # Save to DB (clear ephemeral results)
+                updated_game.pop("_scout_result", None)
+                updated_game.pop("_shugenja_result", None)
+                updated_game.pop("_scorpion_result", None)
                 await db.games.replace_one({"game_id": game_id}, updated_game)
                 # Broadcast to all
                 await ws_manager.broadcast_state(game_id)
@@ -364,6 +367,11 @@ async def websocket_endpoint(ws: WebSocket, game_id: str):
                 # Send notification if round changed
                 if "begins" in message or "resolved" in message or "revealed" in message:
                     await ws_manager.send_notification(game_id, message)
+                # Send shugenja result to ALL players (everyone sees the reveal)
+                if action.get("action") == "use_shugenja":
+                    shugenja_res = game.get("_shugenja_result")
+                    if shugenja_res:
+                        await ws_manager.send_notification(game_id, f"Shugenja revealed: {shugenja_res['token']['type']} {shugenja_res['token']['strength']}")
             else:
                 await ws.send_json({"type": "action_result", "success": False, "message": message})
 

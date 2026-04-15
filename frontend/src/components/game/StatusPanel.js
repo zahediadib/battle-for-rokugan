@@ -70,6 +70,23 @@ export default function StatusPanel({ gameState, myPlayerIndex, isHost, sendActi
             </div>
           )}
 
+          {/* Upkeep phase - territory card playing */}
+          {gameState.phase === 'upkeep' && myPlayerIndex >= 0 && (
+            <div className="glass-panel rounded-sm p-3">
+              <div className="text-[10px] text-[#60A5FA] uppercase tracking-wider font-bold mb-1">Upkeep Phase</div>
+              <p className="text-xs text-[#F5F5F0] mb-2">Play territory cards or pass.</p>
+              {gameState.current_turn_index === myPlayerIndex && (
+                <button
+                  data-testid="pass-territory-btn"
+                  onClick={() => sendAction({ action: 'pass_territory_card' })}
+                  className="w-full py-2 bg-white/10 hover:bg-white/20 text-[#A1A1AA] hover:text-white text-xs font-bold uppercase tracking-wider rounded-sm transition-colors"
+                >
+                  Pass
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Proceed button for resolution */}
           {canProceed && (
             <button
@@ -137,20 +154,35 @@ export default function StatusPanel({ gameState, myPlayerIndex, isHost, sendActi
               <Scroll className="w-3 h-3" /> Territory Cards
             </div>
             <div className="space-y-1">
-              {gameState.territories && Object.entries(gameState.territories).map(([tid, terr]) => (
-                <div key={tid} className="flex items-center justify-between px-2 py-1.5 bg-white/5 rounded-sm text-xs">
-                  <span className="text-[#A1A1AA]">{TERRITORY_LABELS[tid] || tid}</span>
-                  <span className={`font-bold ${
-                    terr.card_used ? 'text-[#A1A1AA] line-through' :
-                    terr.card_owner !== null ? `clan-${gameState.players[terr.card_owner]?.clan}` :
-                    'text-[#A1A1AA]'
-                  }`}>
-                    {terr.card_used ? 'Used' :
-                     terr.card_owner !== null ? CLAN_LABELS[gameState.players[terr.card_owner]?.clan] || 'Claimed' :
-                     'Free'}
-                  </span>
-                </div>
-              ))}
+              {gameState.territories && Object.entries(gameState.territories).map(([tid, terr]) => {
+                const isOwner = terr.card_owner === myPlayerIndex;
+                const canPlay = isOwner && !terr.card_used && (gameState.phase === 'upkeep' || gameState.phase === 'placement');
+                return (
+                  <div key={tid} className={`px-2 py-1.5 bg-white/5 rounded-sm text-xs ${canPlay ? 'hover:bg-white/10 cursor-pointer' : ''}`}
+                    onClick={() => canPlay && sendAction({ action: 'play_territory_card', territory_id: tid })}
+                    data-testid={`territory-card-${tid}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-[#A1A1AA]">{TERRITORY_LABELS[tid] || tid}</span>
+                      <span className={`font-bold ${
+                        terr.card_used ? 'text-[#A1A1AA] line-through' :
+                        terr.card_owner !== null ? `clan-${gameState.players[terr.card_owner]?.clan}` :
+                        'text-[#A1A1AA]'
+                      }`}>
+                        {terr.card_used ? 'Used' :
+                         terr.card_owner !== null ? CLAN_LABELS[gameState.players[terr.card_owner]?.clan] || 'Claimed' :
+                         'Free'}
+                      </span>
+                    </div>
+                    {isOwner && terr.card && !terr.card_used && (
+                      <div className="mt-1 text-[10px] text-[#D4AF37]">{terr.card.name}</div>
+                    )}
+                    {canPlay && (
+                      <div className="mt-1 text-[9px] text-[#C41E3A] font-bold uppercase">Click to play</div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
 

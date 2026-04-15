@@ -169,8 +169,20 @@ def process_action(game, user_id, action):
         return process_place_combat_token(game, player_idx, action)
     elif action_type == "pass_territory_card":
         return process_pass_territory(game, player_idx)
+    elif action_type == "play_territory_card":
+        return process_play_territory_card(game, player_idx, action)
     elif action_type == "proceed":
         return process_proceed(game, player_idx)
+    elif action_type == "use_scout":
+        return process_use_scout(game, player_idx, action)
+    elif action_type == "use_shugenja":
+        return process_use_shugenja(game, player_idx, action)
+    elif action_type == "use_scorpion_ability":
+        return process_scorpion_ability(game, player_idx, action)
+    elif action_type == "use_unicorn_ability":
+        return process_unicorn_ability(game, player_idx, action)
+    elif action_type == "edit_positions":
+        return process_edit_positions(game, player_idx, action)
     elif action_type == "select_token":
         return True, "Token selected", game
     else:
@@ -329,6 +341,8 @@ def start_round(game, round_num):
     for p in game["players"]:
         p["tokens_placed_this_round"] = 0
         p["passed_territory_card"] = False
+        p["scorpion_ability_used"] = False
+        p["dragon_must_return"] = False
 
     game["all_passed_territory"] = False
     game["resolution_revealed"] = False
@@ -346,13 +360,16 @@ def start_round(game, round_num):
     else:
         game["phase"] = "upkeep"
         game["all_passed_territory"] = False
-        game["log"].append(f"Round {round_num} begins. Upkeep phase - play territory cards.")
+        for p in game["players"]:
+            p["passed_territory_card"] = False
+        game["log"].append(f"Round {round_num} begins. Upkeep - play territory cards or pass.")
 
-    # For upkeep in rounds 2+, we handle territory card playing
-    # For simplicity in MVP, auto-skip to placement
-    if round_num > 1:
-        game["phase"] = "placement"
-        game["log"].append(f"Placement phase begins.")
+    # Dragon ability: draw 1 additional, return 1 non-bluff
+    for p in game["players"]:
+        if p["clan"] == "dragon" and len(p["token_pool"]) > 0:
+            p["hand"].append(p["token_pool"].pop(0))
+            p["dragon_must_return"] = True
+            game["log"].append(f"Dragon draws an extra token (must return 1).")
 
 
 def process_place_combat_token(game, player_idx, action):
@@ -971,6 +988,10 @@ def get_player_view(game, user_id, is_spectator=False):
         "resolution_step": game.get("resolution_step", 0),
         "log": game.get("log", [])[-20:],  # last 20 log entries
         "scores": game.get("scores"),
+        "position_overrides": game.get("position_overrides", {}),
+        "scout_result": game.get("_scout_result") if game.get("_scout_result", {}).get("player_index") == (get_player_index(game, user_id) if not is_spectator else -1) else None,
+        "shugenja_result": game.get("_shugenja_result"),
+        "scorpion_result": game.get("_scorpion_result") if game.get("_scorpion_result", {}).get("player_index") == (get_player_index(game, user_id) if not is_spectator else -1) else None,
     }
 
     player_idx = get_player_index(game, user_id) if not is_spectator else -1
@@ -993,6 +1014,8 @@ def get_player_view(game, user_id, is_spectator=False):
             "is_ronin": p["is_ronin"],
             "tokens_placed_this_round": p["tokens_placed_this_round"],
             "territory_cards": [],
+            "scorpion_ability_used": p.get("scorpion_ability_used", False),
+            "dragon_must_return": p.get("dragon_must_return", False),
         }
 
         # Show hand only to the player themselves
@@ -1100,3 +1123,236 @@ def get_player_view(game, user_id, is_spectator=False):
     view["territories"] = view_territories
 
     return view
+
+
+# ===== Phase 2: Scout, Shugenja, Clan Abilities, Territory Cards =====
+
+def process_use_scout(game, player_idx, action):
+    """Scout: Look at one opponent's combat token on the board."""
+    if game["phase"] != "placement":
+        return False, "Can only use Scout during placement", game
+    if player_idx != game["current_turn_index"]:
+        return False, "Not your turn", game
+    player = game["players"][player_idx]
+    if player["scout_cards"] <= 0:
+        return False, "No Scout cards remaining", game
+
+    target_location = action.get("target_location")  # "province" or "border"
+    target_id = action.get("target_id")
+    target_token_idx = action.get("target_token_idx", 0)
+
+    token_info = None
+    if target_location == "province" and target_id in game["provinces"]:
+        tokens = game["provinces"][target_id]["combat_tokens"]
+        for ct in tokens:
+            if ct["player_index"] != player_idx and not ct.get("face_up"):
+                token_info = {"type": ct["type"], "strength": ct["strength"],
+                              "player_index": ct["player_index"], "location": "province", "province_id": target_id}
+                break
+    elif target_location == "border" and target_id in game["borders"]:
+        bt = game["borders"][target_id]["combat_token"]
+        if bt and bt["player_index"] != player_idx and not bt.get("face_up"):
+            token_info = {"type": bt["type"], "strength": bt["strength"],
+                          "player_index": bt["player_index"], "location": "border", "border_id": target_id}
+
+    if not token_info:
+        return False, "No valid hidden opponent token at that location", game
+
+    player["scout_cards"] -= 1
+    clan_name = game["players"][player_idx]["clan"]
+    game["log"].append(f"{clan_name} used Scout to peek at a token.")
+
+    # Return the peeked token info - only the acting player sees this via action_result
+    game["_scout_result"] = {"player_index": player_idx, "token": token_info}
+    return True, f"Scout used|{json.dumps(token_info)}", game
+
+
+def process_use_shugenja(game, player_idx, action):
+    """Shugenja: Reveal and discard one opponent's combat token."""
+    if game["phase"] != "placement":
+        return False, "Can only use Shugenja during placement", game
+    if player_idx != game["current_turn_index"]:
+        return False, "Not your turn", game
+    player = game["players"][player_idx]
+    if player["shugenja_cards"] <= 0:
+        return False, "No Shugenja cards remaining", game
+
+    target_location = action.get("target_location")
+    target_id = action.get("target_id")
+
+    removed_token = None
+    if target_location == "province" and target_id in game["provinces"]:
+        tokens = game["provinces"][target_id]["combat_tokens"]
+        for i, ct in enumerate(tokens):
+            if ct["player_index"] != player_idx and not ct.get("face_up"):
+                # Check blessing protection
+                if ct.get("blessing"):
+                    continue
+                removed_token = tokens.pop(i)
+                # Return to owner's discard
+                owner_idx = removed_token["player_index"]
+                game["players"][owner_idx]["discard_pile"].append({
+                    "id": removed_token["id"], "type": removed_token["type"], "strength": removed_token["strength"]
+                })
+                break
+    elif target_location == "border" and target_id in game["borders"]:
+        bt = game["borders"][target_id]["combat_token"]
+        if bt and bt["player_index"] != player_idx and not bt.get("face_up"):
+            if not bt.get("blessing"):
+                removed_token = bt
+                game["borders"][target_id]["combat_token"] = None
+                owner_idx = removed_token["player_index"]
+                game["players"][owner_idx]["discard_pile"].append({
+                    "id": removed_token["id"], "type": removed_token["type"], "strength": removed_token["strength"]
+                })
+
+    if not removed_token:
+        return False, "No valid target token (may be blessed)", game
+
+    player["shugenja_cards"] -= 1
+    clan_name = game["players"][player_idx]["clan"]
+    victim_clan = game["players"][removed_token["player_index"]]["clan"]
+    game["log"].append(f"{clan_name} used Shugenja! Revealed and discarded {victim_clan}'s {removed_token['type']} {removed_token['strength']}.")
+
+    # All players see the revealed token
+    game["_shugenja_result"] = {
+        "actor": player_idx,
+        "token": {"type": removed_token["type"], "strength": removed_token["strength"],
+                  "player_index": removed_token["player_index"]},
+        "location": target_location, "target_id": target_id,
+    }
+    return True, "Shugenja used", game
+
+
+def process_scorpion_ability(game, player_idx, action):
+    """Scorpion: Once per round, look at one token after placing."""
+    player = game["players"][player_idx]
+    if player["clan"] != "scorpion":
+        return False, "Only Scorpion can use this ability", game
+    if game["phase"] != "placement":
+        return False, "Can only use during placement", game
+    if player.get("scorpion_ability_used"):
+        return False, "Already used Scorpion ability this round", game
+
+    target_location = action.get("target_location")
+    target_id = action.get("target_id")
+
+    token_info = None
+    if target_location == "province" and target_id in game["provinces"]:
+        for ct in game["provinces"][target_id]["combat_tokens"]:
+            if ct["player_index"] != player_idx and not ct.get("face_up"):
+                token_info = {"type": ct["type"], "strength": ct["strength"],
+                              "player_index": ct["player_index"]}
+                break
+    elif target_location == "border" and target_id in game["borders"]:
+        bt = game["borders"][target_id]["combat_token"]
+        if bt and bt["player_index"] != player_idx and not bt.get("face_up"):
+            token_info = {"type": bt["type"], "strength": bt["strength"],
+                          "player_index": bt["player_index"]}
+
+    if not token_info:
+        return False, "No valid hidden opponent token found", game
+
+    player["scorpion_ability_used"] = True
+    game["log"].append(f"Scorpion used spy ability to peek at a token.")
+    game["_scorpion_result"] = {"player_index": player_idx, "token": token_info}
+    return True, f"Scorpion spy|{json.dumps(token_info)}", game
+
+
+def process_unicorn_ability(game, player_idx, action):
+    """Unicorn: Before reveal, switch two of their placed combat tokens."""
+    player = game["players"][player_idx]
+    if player["clan"] != "unicorn":
+        return False, "Only Unicorn can use this ability", game
+    if game["phase"] != "resolution" or game.get("resolution_revealed"):
+        return False, "Can only use before tokens are revealed", game
+
+    # Get two locations to swap
+    loc1 = action.get("location1")  # {type: "province"|"border", id: "..."}
+    loc2 = action.get("location2")
+
+    token1 = _extract_unicorn_token(game, player_idx, loc1)
+    token2 = _extract_unicorn_token(game, player_idx, loc2)
+
+    if not token1 or not token2:
+        return False, "Could not find your tokens at those locations", game
+
+    # Place them swapped
+    _place_unicorn_token(game, token2, loc1)
+    _place_unicorn_token(game, token1, loc2)
+
+    game["log"].append(f"Unicorn swapped two combat tokens.")
+    return True, "Tokens swapped", game
+
+
+def _extract_unicorn_token(game, player_idx, loc):
+    if not loc:
+        return None
+    if loc["type"] == "province" and loc["id"] in game["provinces"]:
+        tokens = game["provinces"][loc["id"]]["combat_tokens"]
+        for i, ct in enumerate(tokens):
+            if ct["player_index"] == player_idx:
+                return tokens.pop(i)
+    elif loc["type"] == "border" and loc["id"] in game["borders"]:
+        bt = game["borders"][loc["id"]]["combat_token"]
+        if bt and bt["player_index"] == player_idx:
+            game["borders"][loc["id"]]["combat_token"] = None
+            return bt
+    return None
+
+
+def _place_unicorn_token(game, token, loc):
+    if loc["type"] == "province":
+        game["provinces"][loc["id"]]["combat_tokens"].append(token)
+    elif loc["type"] == "border":
+        game["borders"][loc["id"]]["combat_token"] = token
+
+
+def process_play_territory_card(game, player_idx, action):
+    """Play a territory card during upkeep (non-shadowlands) or placement (shadowlands)."""
+    player = game["players"][player_idx]
+    territory_id = action.get("territory_id")
+
+    if territory_id not in game["territories"]:
+        return False, "Invalid territory", game
+
+    terr = game["territories"][territory_id]
+    if terr["card_owner"] != player_idx:
+        return False, "You don't own this territory card", game
+    if terr["card_used"]:
+        return False, "Card already used", game
+
+    is_shadowland = territory_id.startswith("shadowland")
+
+    if is_shadowland and game["phase"] != "placement":
+        return False, "Shadowlands cards can only be played during placement phase", game
+    if not is_shadowland and game["phase"] not in ("upkeep", "placement"):
+        return False, "Territory cards played during upkeep or placement", game
+
+    # Mark card as used
+    terr["card_used"] = True
+    card_name = terr["card"]["name"] if terr["card"] else "Unknown"
+    clan_name = player["clan"]
+    game["log"].append(f"{clan_name} played territory card: {card_name}")
+
+    # Note: Actual card effects would require complex multi-step interactions
+    # For now we mark it as used and log it. Full effects require additional UI flows.
+    return True, f"Territory card played: {card_name}", game
+
+
+def process_edit_positions(game, player_idx, action):
+    """Host edit mode: update visual positions of tokens."""
+    player = game["players"][player_idx]
+    if player["user_id"] != game["host_user_id"]:
+        return False, "Only host can edit positions", game
+
+    positions = action.get("positions", {})
+    # Store position overrides in game state
+    if "position_overrides" not in game:
+        game["position_overrides"] = {}
+    game["position_overrides"].update(positions)
+    game["log"].append("Host adjusted token positions.")
+    return True, "Positions updated", game
+
+
+import json  # needed for scout result serialization

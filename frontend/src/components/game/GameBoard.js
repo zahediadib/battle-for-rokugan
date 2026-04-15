@@ -122,7 +122,7 @@ const CLAN_COLORS_MAP = {
   phoenix: '#FB923C', scorpion: '#F87171', unicorn: '#A78BFA',
 };
 
-export default function GameBoard({ gameState, myPlayerIndex, selectedToken, sourceProvince, placementStep, onProvinceClick, onBorderClick, onSeaClick }) {
+export default function GameBoard({ gameState, myPlayerIndex, selectedToken, sourceProvince, placementStep, onProvinceClick, onBorderClick, onSeaClick, abilityMode, editMode }) {
   const containerRef = useRef(null);
   const [scale, setScale] = useState(1);
 
@@ -143,7 +143,7 @@ export default function GameBoard({ gameState, myPlayerIndex, selectedToken, sou
   const isMyTurn = myPlayerIndex === gameState.current_turn_index;
   const isPlacement = gameState.phase === 'placement';
   const isSetup = gameState.status === 'setup' && gameState.phase === 'setup';
-  const canInteract = isMyTurn && (isPlacement || isSetup);
+  const canInteract = (isMyTurn && (isPlacement || isSetup)) || abilityMode;
 
   const provinceInfo = useMemo(() => {
     const info = {};
@@ -185,15 +185,15 @@ export default function GameBoard({ gameState, myPlayerIndex, selectedToken, sou
               {/* Clickable area */}
               <div
                 data-testid={`province-${prov.id}`}
-                onClick={() => isClickable && onProvinceClick(prov.id)}
+                onClick={() => (isClickable || abilityMode) && onProvinceClick(prov.id)}
                 style={{
                   position: 'absolute', left: s(prov.center.x) - s(50), top: s(prov.center.y) - s(50),
                   width: s(100), height: s(100), borderRadius: '50%',
-                  cursor: isClickable ? 'pointer' : 'default', zIndex: 10,
-                  border: isSource ? '3px solid #D4AF37' : 'none',
-                  backgroundColor: isSource ? 'rgba(212,175,55,0.2)' : 'transparent',
+                  cursor: (isClickable || abilityMode) ? 'pointer' : 'default', zIndex: 10,
+                  border: isSource ? '3px solid #D4AF37' : abilityMode ? '2px dashed rgba(196,30,58,0.4)' : 'none',
+                  backgroundColor: isSource ? 'rgba(212,175,55,0.2)' : abilityMode ? 'rgba(196,30,58,0.08)' : 'transparent',
                 }}
-                className={isClickable && (selectedToken || isSetup) ? 'province-clickable' : 'province-hover'}
+                className={(isClickable && (selectedToken || isSetup)) || abilityMode ? 'province-clickable' : 'province-hover'}
                 title={prov.id}
               />
 
@@ -252,19 +252,41 @@ export default function GameBoard({ gameState, myPlayerIndex, selectedToken, sou
         {BORDERS_DATA.filter(b => b.type === 'land').map(border => {
           const borderState = gameState.borders?.[border.id];
           const hasCombat = borderState?.combat_token;
-          const isClickable = canInteract && selectedToken && !hasCombat;
+          const isClickable = canInteract && (selectedToken || abilityMode) && !hasCombat;
+          const isAbilityTarget = abilityMode && hasCombat;
+
+          // Direction pointer: figure out which province the attacker controls
+          let pointerAngle = 0;
+          if (hasCombat && hasCombat.player_index !== undefined) {
+            const p1 = PROVINCES_DATA.find(p => p.id === border.provinces[0]);
+            const p2 = PROVINCES_DATA.find(p => p.id === border.provinces[1]);
+            if (p1 && p2) {
+              // Point from attacker's province toward target
+              const attackerProv = gameState.provinces?.[border.provinces[0]]?.controlled_by === hasCombat.player_index
+                ? p1 : p2;
+              const targetProv = attackerProv === p1 ? p2 : p1;
+              pointerAngle = Math.atan2(
+                targetProv.center.y - attackerProv.center.y,
+                targetProv.center.x - attackerProv.center.x
+              ) * (180 / Math.PI);
+            }
+          }
 
           return (
             <React.Fragment key={`border-${border.id}`}>
               <div
                 data-testid={`border-${border.id}`}
-                onClick={() => isClickable && onBorderClick(border.id)}
+                onClick={() => {
+                  if (isAbilityTarget) onBorderClick(border.id);
+                  else if (isClickable) onBorderClick(border.id);
+                }}
                 style={{
                   position: 'absolute', left: s(border.point.x) - s(18), top: s(border.point.y) - s(18),
                   width: s(36), height: s(36), borderRadius: '50%',
-                  cursor: isClickable ? 'pointer' : 'default', zIndex: 12,
-                  backgroundColor: isClickable ? 'rgba(196,30,58,0.2)' : 'transparent',
-                  border: isClickable ? '1px dashed rgba(196,30,58,0.4)' : 'none',
+                  cursor: (isClickable || isAbilityTarget) ? 'pointer' : 'default', zIndex: 12,
+                  backgroundColor: isAbilityTarget ? 'rgba(196,30,58,0.3)'
+                    : isClickable ? 'rgba(196,30,58,0.2)' : 'transparent',
+                  border: (isClickable || isAbilityTarget) ? '1px dashed rgba(196,30,58,0.4)' : 'none',
                 }}
                 title={`Border: ${border.provinces.join(' <> ')}`}
               />
@@ -273,8 +295,9 @@ export default function GameBoard({ gameState, myPlayerIndex, selectedToken, sou
                   position: 'absolute',
                   left: s(border.point.x) - tokenSize / 2,
                   top: s(border.point.y) - tokenSize / 2,
-                  zIndex: 15, pointerEvents: 'none',
-                }}>
+                  zIndex: 15, pointerEvents: isAbilityTarget ? 'auto' : 'none',
+                  cursor: isAbilityTarget ? 'pointer' : 'default',
+                }} onClick={() => isAbilityTarget && onBorderClick(border.id)}>
                   <CombatToken
                     token={hasCombat}
                     color={hasCombat.player_index !== undefined && gameState.players[hasCombat.player_index]
@@ -282,6 +305,18 @@ export default function GameBoard({ gameState, myPlayerIndex, selectedToken, sou
                     faceUp={hasCombat.face_up}
                     size={tokenSize}
                   />
+                  {/* Direction pointer arrow */}
+                  {hasCombat.face_up && hasCombat.type !== 'hidden' && (
+                    <div style={{
+                      position: 'absolute', top: -tokenSize * 0.3, left: '50%',
+                      transform: `translateX(-50%) rotate(${pointerAngle - 90}deg)`,
+                      width: 0, height: 0,
+                      borderLeft: `${tokenSize * 0.15}px solid transparent`,
+                      borderRight: `${tokenSize * 0.15}px solid transparent`,
+                      borderBottom: `${tokenSize * 0.25}px solid #D4AF37`,
+                      opacity: 0.8,
+                    }} />
+                  )}
                 </div>
               )}
             </React.Fragment>
