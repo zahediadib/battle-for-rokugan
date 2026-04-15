@@ -1,0 +1,86 @@
+{
+  "theme": "DARK",
+  "archetype": "5",
+  "archetype_name": "Jewel & Luxury (Feudal War Variant)",
+  "colors": {
+    "primary": "#C41E3A",
+    "primary_hover": "#A01830",
+    "secondary": "#D4AF37",
+    "secondary_hover": "#B5952F",
+    "background": "#0A0A0A",
+    "surface": "#161618",
+    "surface_glass": "rgba(22, 22, 24, 0.7)",
+    "border": "rgba(255, 255, 255, 0.1)",
+    "text_primary": "#F5F5F0",
+    "text_secondary": "#A1A1AA",
+    "success": "#2E7D32",
+    "warning": "#F57C00",
+    "danger": "#D32F2F"
+  },
+  "typography": {
+    "font_family_heading": "'Cinzel', serif",
+    "font_family_body": "'Manrope', sans-serif",
+    "h1": "text-4xl sm:text-5xl lg:text-6xl tracking-tight font-black",
+    "h2": "text-2xl sm:text-3xl lg:text-4xl tracking-tight font-bold",
+    "h3": "text-xl sm:text-2xl tracking-tight font-bold",
+    "body": "text-base leading-relaxed font-light",
+    "overline": "text-xs uppercase tracking-[0.2em] font-bold"
+  },
+  "spacing_and_layout": {
+    "container_padding": "p-6 md:p-8 lg:p-12",
+    "gap_standard": "gap-6",
+    "gap_large": "gap-12",
+    "border_radius": "rounded-sm",
+    "game_board_grid": "grid-cols-1 lg:grid-cols-12 gap-4",
+    "panel_glassmorphism": "backdrop-blur-xl bg-[#161618]/70 border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)]",
+    "panel_solid": "bg-[#161618] border border-white/5 shadow-lg"
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-[#C41E3A] text-white hover:bg-[#A01830] transition-colors border border-transparent shadow-md",
+      "secondary": "bg-transparent border border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37]/10 transition-colors",
+      "ghost": "bg-transparent text-white hover:bg-white/10 transition-colors"
+    },
+    "inputs": {
+      "default": "bg-black/50 border border-white/20 text-white focus:ring-2 focus:ring-[#C41E3A] focus:border-transparent"
+    },
+    "cards": {
+      "default": "bg-[#161618] border border-white/10 p-6 rounded-sm hover:border-[#D4AF37]/50 transition-colors"
+    }
+  },
+  "animation_and_motion": {
+    "hover_state": "transition-all duration-300 ease-in-out",
+    "card_hover": "-translate-y-1 shadow-[0_8px_24px_rgba(196,30,58,0.2)]",
+    "token_placement": "scale-in animation with subtle bounce",
+    "battle_resolution": "flash effect, shake on combat tokens, high impact"
+  },
+  "media": {
+    "images": {
+      "login_background": {
+        "url": "https://images.unsplash.com/photo-1746960854615-d99ee8e55b96?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzB8MHwxfHNlYXJjaHwzfHxzYW11cmFpJTIwc3dvcmQlMjBkYXJrfGVufDB8fHx8MTc3NjI2ODgyOHww&ixlib=rb-4.1.0&q=85",
+        "description": "A man kneels with swords in a dramatic pose - dark cinematic background for login screen."
+      },
+      "lobby_background": {
+        "url": "https://images.unsplash.com/photo-1764603625108-61b26a1c9dca?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODF8MHwxfHNlYXJjaHwyfHxmZXVkYWwlMjBqYXBhbiUyMHNhbXVyYWklMjBhcmNoaXRlY3R1cmV8ZW58MHx8fHwxNzc2MjY4ODEzfDA&ixlib=rb-4.1.0&q=85",
+        "description": "A white japanese castle against a blue sky. Add a heavy dark overlay (bg-black/70) when using this image."
+      },
+      "game_board_texture": {
+        "url": "https://images.unsplash.com/photo-1711107762183-d99536fb7d6e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2Mzl8MHwxfHNlYXJjaHwzfHxkYXJrJTIwcGFyY2htZW50JTIwdGV4dHVyZXxlbnwwfHx8fDE3NzYyNjg4Mjh8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Dark parchment paper texture for the game board background and territory cards."
+      }
+    },
+    "icons": {
+      "library": "lucide-react",
+      "usage": "Use sharp, distinct icons for combat (swords, shields), honor (star/medal), provinces (map-pin). Size generally 16px to 24px."
+    }
+  },
+  "instructions_to_main_agent": [
+    "Use pure HTML/Tailwind for the main Game Board map container to allow absolute positioning of tokens on the 3737x2313 board image (scale accordingly using aspect ratios).",
+    "The UI is 'Control Room' mode during gameplay: dense grids, dark panels, minimal gaps (gap-4). Everything must fit on screen or use localized scrolling inside panels.",
+    "For the Login and Lobby, use generous spacing (Tetris Mode) with glassmorphic cards (bg-[#161618]/70 backdrop-blur-xl) over the dramatic samurai/castle backgrounds.",
+    "Implement 'data-testid' on ALL interactive elements (tokens, cards, board regions, buttons) for robust testing.",
+    "Headings MUST use 'Cinzel' font. Body must use 'Manrope' font. Do not use Inter or generic sans.",
+    "Rely heavily on high contrast. Important gameplay actions (Place Token, Resolve Battle) should use the Primary color (#C41E3A). Neutral actions use the Secondary Gold (#D4AF37).",
+    "Round tracker should visually distinct active phase using text glow or prominent #D4AF37 border."
+  ]
+}
