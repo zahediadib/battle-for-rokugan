@@ -1,41 +1,23 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { CombatToken, ControlToken, SpecialToken } from './TokenImages';
-
-const BOARD_W = 3737;
-const BOARD_H = 2313;
-const SEA_RECT = { x1: 1488, y1: 1832, x2: 2806, y2: 2154 };
+import { BOARD_W, BOARD_H, SEA_RECT, CLANS } from '../../constants/gameConstants';
 
 const PROVINCES_DATA = [
-  { id: "shadowland_bottom", center: { x: 672, y: 342 }, territoryId: "shadowland" },
-  { id: "shadowland_top", center: { x: 1363, y: 180 }, territoryId: "shadowland" },
-  { id: "crab_1", center: { x: 2047, y: 291 }, territoryId: "crab" },
-  { id: "crab_2", center: { x: 1467, y: 664 }, territoryId: "crab" },
-  { id: "crab_3", center: { x: 881, y: 775 }, territoryId: "crab" },
-  { id: "crab_4", center: { x: 1960, y: 746 }, territoryId: "crab" },
-  { id: "wind_1", center: { x: 937, y: 990 }, territoryId: "wind" },
-  { id: "wind_2", center: { x: 1540, y: 1023 }, territoryId: "wind" },
-  { id: "wind_3", center: { x: 1529, y: 1339 }, territoryId: "wind" },
-  { id: "crane_1", center: { x: 1854, y: 1200 }, territoryId: "crane" },
-  { id: "crane_2", center: { x: 2075, y: 1396 }, territoryId: "crane" },
-  { id: "crane_3", center: { x: 2307, y: 1550 }, territoryId: "crane" },
-  { id: "lion_1", center: { x: 2645, y: 1589 }, territoryId: "lion" },
-  { id: "lion_2", center: { x: 2508, y: 1294 }, territoryId: "lion" },
-  { id: "lion_3", center: { x: 2910, y: 956 }, territoryId: "lion" },
-  { id: "scorpion_1", center: { x: 2142, y: 1081 }, territoryId: "scorpion" },
-  { id: "scorpion_2", center: { x: 2491, y: 924 }, territoryId: "scorpion" },
-  { id: "scorpion_3", center: { x: 2399, y: 554 }, territoryId: "scorpion" },
-  { id: "unicorn_1", center: { x: 2745, y: 332 }, territoryId: "unicorn" },
-  { id: "unicorn_2", center: { x: 3071, y: 446 }, territoryId: "unicorn" },
-  { id: "unicorn_3", center: { x: 2799, y: 696 }, territoryId: "unicorn" },
-  { id: "dragon_1", center: { x: 3341, y: 716 }, territoryId: "dragon" },
-  { id: "dragon_2", center: { x: 3134, y: 1201 }, territoryId: "dragon" },
-  { id: "dragon_3", center: { x: 2840, y: 1330 }, territoryId: "dragon" },
-  { id: "phoenix_1", center: { x: 3221, y: 1851 }, territoryId: "phoenix" },
-  { id: "phoenix_2", center: { x: 3263, y: 1711 }, territoryId: "phoenix" },
-  { id: "phoenix_3", center: { x: 3238, y: 1526 }, territoryId: "phoenix" },
-  { id: "island_1", center: { x: 775, y: 1551 }, territoryId: "island" },
-  { id: "island_2", center: { x: 748, y: 1807 }, territoryId: "island" },
-  { id: "island_3", center: { x: 1196, y: 1913 }, territoryId: "island" },
+  { id: "shadowland_bottom", center: { x: 672, y: 342 } }, { id: "shadowland_top", center: { x: 1363, y: 180 } },
+  { id: "crab_1", center: { x: 2047, y: 291 } }, { id: "crab_2", center: { x: 1467, y: 664 } },
+  { id: "crab_3", center: { x: 881, y: 775 } }, { id: "crab_4", center: { x: 1960, y: 746 } },
+  { id: "wind_1", center: { x: 937, y: 990 } }, { id: "wind_2", center: { x: 1540, y: 1023 } },
+  { id: "wind_3", center: { x: 1529, y: 1339 } }, { id: "crane_1", center: { x: 1854, y: 1200 } },
+  { id: "crane_2", center: { x: 2075, y: 1396 } }, { id: "crane_3", center: { x: 2307, y: 1550 } },
+  { id: "lion_1", center: { x: 2645, y: 1589 } }, { id: "lion_2", center: { x: 2508, y: 1294 } },
+  { id: "lion_3", center: { x: 2910, y: 956 } }, { id: "scorpion_1", center: { x: 2142, y: 1081 } },
+  { id: "scorpion_2", center: { x: 2491, y: 924 } }, { id: "scorpion_3", center: { x: 2399, y: 554 } },
+  { id: "unicorn_1", center: { x: 2745, y: 332 } }, { id: "unicorn_2", center: { x: 3071, y: 446 } },
+  { id: "unicorn_3", center: { x: 2799, y: 696 } }, { id: "dragon_1", center: { x: 3341, y: 716 } },
+  { id: "dragon_2", center: { x: 3134, y: 1201 } }, { id: "dragon_3", center: { x: 2840, y: 1330 } },
+  { id: "phoenix_1", center: { x: 3221, y: 1851 } }, { id: "phoenix_2", center: { x: 3263, y: 1711 } },
+  { id: "phoenix_3", center: { x: 3238, y: 1526 } }, { id: "island_1", center: { x: 775, y: 1551 } },
+  { id: "island_2", center: { x: 748, y: 1807 } }, { id: "island_3", center: { x: 1196, y: 1913 } },
 ];
 
 const BORDERS_DATA = [
@@ -117,12 +99,7 @@ const BORDERS_DATA = [
   { id: "76", provinces: ["phoenix_1", "sea"], type: "sea", point: { x: 3213, y: 1927 }, isUpDown: true },
 ];
 
-const CLAN_COLORS_MAP = {
-  crab: '#9CA3AF', crane: '#60A5FA', dragon: '#34D399', lion: '#FBBF24',
-  phoenix: '#FB923C', scorpion: '#F87171', unicorn: '#A78BFA',
-};
-
-export default function GameBoard({ gameState, myPlayerIndex, selectedToken, sourceProvince, placementStep, onProvinceClick, onBorderClick, onSeaClick, abilityMode, editMode }) {
+export default function GameBoard({ gameState, myPlayerIndex, selectedToken, sourceProvince, placementStep, onProvinceClick, onBorderClick, onSeaClick, abilityMode, blessingMode }) {
   const containerRef = useRef(null);
   const [scale, setScale] = useState(1);
 
@@ -143,21 +120,24 @@ export default function GameBoard({ gameState, myPlayerIndex, selectedToken, sou
   const isMyTurn = myPlayerIndex === gameState.current_turn_index;
   const isPlacement = gameState.phase === 'placement';
   const isSetup = gameState.status === 'setup' && gameState.phase === 'setup';
-  const canInteract = (isMyTurn && (isPlacement || isSetup)) || abilityMode;
+  const canInteract = (isMyTurn && (isPlacement || isSetup)) || abilityMode || blessingMode;
+
+  // Token sizes: 2x base
+  const tokenSize = Math.max(s(72), 24);
+  const controlSize = Math.max(s(50), 16);
+  // Direction pointer: 3x
+  const pointerSize = Math.max(s(30), 10);
 
   const provinceInfo = useMemo(() => {
     const info = {};
     PROVINCES_DATA.forEach(p => {
-      const provState = gameState.provinces?.[p.id];
-      const ci = provState?.controlled_by;
+      const ps = gameState.provinces?.[p.id];
+      const ci = ps?.controlled_by;
       const clan = ci !== null && ci !== undefined && gameState.players[ci] ? gameState.players[ci].clan : null;
-      info[p.id] = { ...p, controllerClan: clan, controllerColor: clan ? CLAN_COLORS_MAP[clan] : null, provState };
+      info[p.id] = { ...p, controllerClan: clan, controllerColor: clan ? CLANS[clan]?.color : null, provState: ps };
     });
     return info;
   }, [gameState]);
-
-  const tokenSize = Math.max(s(36), 14);
-  const controlSize = Math.max(s(28), 10);
 
   return (
     <div ref={containerRef} className="flex-1 overflow-auto flex items-center justify-center bg-[#0A0A0A] relative" data-testid="game-board">
@@ -168,32 +148,29 @@ export default function GameBoard({ gameState, myPlayerIndex, selectedToken, sou
         {PROVINCES_DATA.map(prov => {
           const info = provinceInfo[prov.id];
           const provState = info?.provState;
-          const isClickable = canInteract;
           const isSource = sourceProvince === prov.id;
+          const showClickable = canInteract || !selectedToken;
 
           return (
             <React.Fragment key={prov.id}>
-              {/* Ownership glow */}
               {info?.controllerColor && (
                 <div style={{
-                  position: 'absolute', left: s(prov.center.x) - s(35), top: s(prov.center.y) - s(35),
-                  width: s(70), height: s(70), borderRadius: '50%',
+                  position: 'absolute', left: s(prov.center.x) - s(40), top: s(prov.center.y) - s(40),
+                  width: s(80), height: s(80), borderRadius: '50%',
                   backgroundColor: info.controllerColor, opacity: 0.18, pointerEvents: 'none',
                 }} />
               )}
 
-              {/* Clickable area */}
-              <div
-                data-testid={`province-${prov.id}`}
-                onClick={() => (isClickable || abilityMode) && onProvinceClick(prov.id)}
+              <div data-testid={`province-${prov.id}`}
+                onClick={() => onProvinceClick(prov.id)}
                 style={{
                   position: 'absolute', left: s(prov.center.x) - s(50), top: s(prov.center.y) - s(50),
                   width: s(100), height: s(100), borderRadius: '50%',
-                  cursor: (isClickable || abilityMode) ? 'pointer' : 'default', zIndex: 10,
-                  border: isSource ? '3px solid #D4AF37' : abilityMode ? '2px dashed rgba(196,30,58,0.4)' : 'none',
-                  backgroundColor: isSource ? 'rgba(212,175,55,0.2)' : abilityMode ? 'rgba(196,30,58,0.08)' : 'transparent',
+                  cursor: 'pointer', zIndex: 10,
+                  border: isSource ? '3px solid #D4AF37' : abilityMode ? '2px dashed rgba(196,30,58,0.4)' : blessingMode ? '2px dashed rgba(212,175,55,0.4)' : 'none',
+                  backgroundColor: isSource ? 'rgba(212,175,55,0.2)' : 'transparent',
                 }}
-                className={(isClickable && (selectedToken || isSetup)) || abilityMode ? 'province-clickable' : 'province-hover'}
+                className="province-clickable"
                 title={prov.id}
               />
 
@@ -201,7 +178,7 @@ export default function GameBoard({ gameState, myPlayerIndex, selectedToken, sou
               {provState?.control_tokens?.map((ct, idx) => {
                 const count = provState.control_tokens.length;
                 const angle = (idx / Math.max(count, 1)) * Math.PI * 2 - Math.PI / 2;
-                const r = count > 1 ? 25 : 0;
+                const r = count > 1 ? 30 : 0;
                 return (
                   <div key={`ct-${prov.id}-${idx}`} style={{
                     position: 'absolute',
@@ -218,17 +195,25 @@ export default function GameBoard({ gameState, myPlayerIndex, selectedToken, sou
               {provState?.combat_tokens?.map((ct, idx) => {
                 const count = provState.combat_tokens.length;
                 const angle = ((idx + 1) / (count + 1)) * Math.PI * 2 - Math.PI / 2;
-                const r = 42;
+                const r = 50;
                 const playerColor = ct.player_index !== undefined && gameState.players[ct.player_index]
                   ? gameState.players[ct.player_index].color : 'Gray';
+                const isClickableForBlessing = blessingMode && ct.player_index === myPlayerIndex;
                 return (
                   <div key={`combat-${prov.id}-${idx}`} style={{
                     position: 'absolute',
                     left: s(prov.center.x + Math.cos(angle) * r) - tokenSize / 2,
                     top: s(prov.center.y + Math.sin(angle) * r) - tokenSize / 2,
-                    zIndex: 15, pointerEvents: 'none',
-                  }}>
+                    zIndex: 15, pointerEvents: isClickableForBlessing ? 'auto' : 'none',
+                    cursor: isClickableForBlessing ? 'pointer' : 'default',
+                  }} onClick={() => isClickableForBlessing && onProvinceClick(prov.id)}>
                     <CombatToken token={ct} color={playerColor} faceUp={ct.face_up} size={tokenSize} />
+                    {isClickableForBlessing && (
+                      <div style={{
+                        position: 'absolute', inset: -3, borderRadius: '50%',
+                        border: '2px dashed #D4AF37', animation: 'pulse-gold 1.5s ease-in-out infinite',
+                      }} />
+                    )}
                   </div>
                 );
               })}
@@ -236,86 +221,88 @@ export default function GameBoard({ gameState, myPlayerIndex, selectedToken, sou
               {/* Special token */}
               {provState?.special_token && (
                 <div style={{
-                  position: 'absolute',
-                  left: s(prov.center.x) - s(18),
-                  top: s(prov.center.y) - s(55),
+                  position: 'absolute', left: s(prov.center.x) - s(22), top: s(prov.center.y) - s(65),
                   zIndex: 20, pointerEvents: 'none',
                 }}>
-                  <SpecialToken type={provState.special_token} size={Math.max(s(36), 14)} />
+                  <SpecialToken type={provState.special_token} size={Math.max(s(44), 18)} />
                 </div>
               )}
             </React.Fragment>
           );
         })}
 
-        {/* Land Borders */}
-        {BORDERS_DATA.filter(b => b.type === 'land').map(border => {
+        {/* All Borders (land + sea) */}
+        {BORDERS_DATA.map(border => {
           const borderState = gameState.borders?.[border.id];
           const hasCombat = borderState?.combat_token;
-          const isClickable = canInteract && (selectedToken || abilityMode) && !hasCombat;
+          const isClickable = canInteract && !hasCombat && selectedToken;
           const isAbilityTarget = abilityMode && hasCombat;
+          const isBlessingTarget = blessingMode && hasCombat && hasCombat.player_index === myPlayerIndex;
 
-          // Direction pointer: figure out which province the attacker controls
-          let pointerAngle = 0;
-          if (hasCombat && hasCombat.player_index !== undefined) {
-            const p1 = PROVINCES_DATA.find(p => p.id === border.provinces[0]);
-            const p2 = PROVINCES_DATA.find(p => p.id === border.provinces[1]);
-            if (p1 && p2) {
-              // Point from attacker's province toward target
-              const attackerProv = gameState.provinces?.[border.provinces[0]]?.controlled_by === hasCombat.player_index
-                ? p1 : p2;
-              const targetProv = attackerProv === p1 ? p2 : p1;
-              pointerAngle = Math.atan2(
-                targetProv.center.y - attackerProv.center.y,
-                targetProv.center.x - attackerProv.center.x
-              ) * (180 / Math.PI);
+          // Direction pointer: based on isUpDown and which province the attacker controls
+          let pointerDir = null; // 'top' | 'bottom' | 'left' | 'right'
+          if (hasCombat && hasCombat.face_up && hasCombat.type !== 'hidden') {
+            const p1id = border.provinces[0];
+            const p2id = border.provinces[1];
+            const p1Controlled = gameState.provinces?.[p1id]?.controlled_by === hasCombat.player_index;
+            // Provinces are sorted: first is "Up" or "Left", second is "Down" or "Right"
+            if (border.isUpDown) {
+              pointerDir = p1Controlled ? 'bottom' : 'top'; // Attacking from p1 (up) to p2 (down)
+            } else {
+              pointerDir = p1Controlled ? 'right' : 'left'; // Attacking from p1 (left) to p2 (right)
             }
           }
 
           return (
             <React.Fragment key={`border-${border.id}`}>
-              <div
-                data-testid={`border-${border.id}`}
+              {/* Clickable area */}
+              <div data-testid={`border-${border.id}`}
                 onClick={() => {
-                  if (isAbilityTarget) onBorderClick(border.id);
+                  if (isBlessingTarget) onBorderClick(border.id);
+                  else if (isAbilityTarget) onBorderClick(border.id);
                   else if (isClickable) onBorderClick(border.id);
                 }}
                 style={{
-                  position: 'absolute', left: s(border.point.x) - s(18), top: s(border.point.y) - s(18),
-                  width: s(36), height: s(36), borderRadius: '50%',
-                  cursor: (isClickable || isAbilityTarget) ? 'pointer' : 'default', zIndex: 12,
-                  backgroundColor: isAbilityTarget ? 'rgba(196,30,58,0.3)'
-                    : isClickable ? 'rgba(196,30,58,0.2)' : 'transparent',
-                  border: (isClickable || isAbilityTarget) ? '1px dashed rgba(196,30,58,0.4)' : 'none',
+                  position: 'absolute', left: s(border.point.x) - s(22), top: s(border.point.y) - s(22),
+                  width: s(44), height: s(44), borderRadius: '50%',
+                  cursor: (isClickable || isAbilityTarget || isBlessingTarget) ? 'pointer' : 'default', zIndex: 12,
+                  backgroundColor: isAbilityTarget ? 'rgba(196,30,58,0.25)' : isBlessingTarget ? 'rgba(212,175,55,0.25)' : isClickable ? 'rgba(196,30,58,0.12)' : 'transparent',
+                  border: isClickable ? '1px dashed rgba(255,255,255,0.15)' : 'none',
                 }}
-                title={`Border: ${border.provinces.join(' <> ')}`}
               />
+
+              {/* Combat token on border */}
               {hasCombat && (
                 <div style={{
                   position: 'absolute',
                   left: s(border.point.x) - tokenSize / 2,
                   top: s(border.point.y) - tokenSize / 2,
-                  zIndex: 15, pointerEvents: isAbilityTarget ? 'auto' : 'none',
-                  cursor: isAbilityTarget ? 'pointer' : 'default',
-                }} onClick={() => isAbilityTarget && onBorderClick(border.id)}>
+                  zIndex: 15,
+                  pointerEvents: (isAbilityTarget || isBlessingTarget) ? 'auto' : 'none',
+                  cursor: (isAbilityTarget || isBlessingTarget) ? 'pointer' : 'default',
+                }} onClick={() => (isAbilityTarget || isBlessingTarget) && onBorderClick(border.id)}>
                   <CombatToken
                     token={hasCombat}
-                    color={hasCombat.player_index !== undefined && gameState.players[hasCombat.player_index]
-                      ? gameState.players[hasCombat.player_index].color : 'Gray'}
-                    faceUp={hasCombat.face_up}
-                    size={tokenSize}
+                    color={hasCombat.player_index !== undefined && gameState.players[hasCombat.player_index] ? gameState.players[hasCombat.player_index].color : 'Gray'}
+                    faceUp={hasCombat.face_up} size={tokenSize}
                   />
-                  {/* Direction pointer arrow */}
-                  {hasCombat.face_up && hasCombat.type !== 'hidden' && (
+                  {/* Direction pointer - 3x size, positioned at top/bottom/left/right */}
+                  {pointerDir && (
                     <div style={{
-                      position: 'absolute', top: -tokenSize * 0.3, left: '50%',
-                      transform: `translateX(-50%) rotate(${pointerAngle - 90}deg)`,
+                      position: 'absolute',
+                      ...(pointerDir === 'top' ? { top: -pointerSize - 2, left: '50%', transform: 'translateX(-50%)' } :
+                         pointerDir === 'bottom' ? { bottom: -pointerSize - 2, left: '50%', transform: 'translateX(-50%) rotate(180deg)' } :
+                         pointerDir === 'left' ? { left: -pointerSize - 2, top: '50%', transform: 'translateY(-50%) rotate(-90deg)' } :
+                         { right: -pointerSize - 2, top: '50%', transform: 'translateY(-50%) rotate(90deg)' }),
                       width: 0, height: 0,
-                      borderLeft: `${tokenSize * 0.15}px solid transparent`,
-                      borderRight: `${tokenSize * 0.15}px solid transparent`,
-                      borderBottom: `${tokenSize * 0.25}px solid #D4AF37`,
-                      opacity: 0.8,
+                      borderLeft: `${pointerSize * 0.5}px solid transparent`,
+                      borderRight: `${pointerSize * 0.5}px solid transparent`,
+                      borderBottom: `${pointerSize}px solid #D4AF37`,
+                      filter: 'drop-shadow(0 0 4px rgba(212,175,55,0.6))',
                     }} />
+                  )}
+                  {isBlessingTarget && (
+                    <div style={{ position: 'absolute', inset: -3, borderRadius: '50%', border: '2px dashed #D4AF37' }} />
                   )}
                 </div>
               )}
@@ -323,53 +310,14 @@ export default function GameBoard({ gameState, myPlayerIndex, selectedToken, sou
           );
         })}
 
-        {/* Sea Borders */}
-        {BORDERS_DATA.filter(b => b.type === 'sea').map(border => {
-          const borderState = gameState.borders?.[border.id];
-          const hasCombat = borderState?.combat_token;
-          const isClickable = canInteract && selectedToken && !hasCombat;
-
-          return (
-            <React.Fragment key={`sea-border-${border.id}`}>
-              <div
-                data-testid={`sea-border-${border.id}`}
-                onClick={() => isClickable && onBorderClick(border.id)}
-                style={{
-                  position: 'absolute', left: s(border.point.x) - s(14), top: s(border.point.y) - s(14),
-                  width: s(28), height: s(28), borderRadius: '50%',
-                  cursor: isClickable ? 'pointer' : 'default', zIndex: 12,
-                  backgroundColor: isClickable ? 'rgba(96,165,250,0.2)' : 'transparent',
-                }}
-              />
-              {hasCombat && (
-                <div style={{
-                  position: 'absolute',
-                  left: s(border.point.x) - tokenSize / 2,
-                  top: s(border.point.y) - tokenSize / 2,
-                  zIndex: 15, pointerEvents: 'none',
-                }}>
-                  <CombatToken
-                    token={hasCombat}
-                    color={hasCombat.player_index !== undefined && gameState.players[hasCombat.player_index]
-                      ? gameState.players[hasCombat.player_index].color : 'Gray'}
-                    faceUp={hasCombat.face_up}
-                    size={tokenSize}
-                  />
-                </div>
-              )}
-            </React.Fragment>
-          );
-        })}
-
-        {/* Sea area for navy */}
-        {canInteract && selectedToken && (selectedToken.type === 'navy' || selectedToken.type === 'bluff') && (
-          <div
-            data-testid="sea-area"
-            onClick={onSeaClick}
+        {/* Sea clickable area */}
+        {selectedToken && !blessingMode && !abilityMode && (
+          <div data-testid="sea-area" onClick={onSeaClick}
             style={{
               position: 'absolute', left: s(SEA_RECT.x1), top: s(SEA_RECT.y1),
               width: s(SEA_RECT.x2 - SEA_RECT.x1), height: s(SEA_RECT.y2 - SEA_RECT.y1),
-              backgroundColor: 'rgba(96,165,250,0.08)', border: '2px dashed rgba(96,165,250,0.3)',
+              backgroundColor: sourceProvince === 'sea' ? 'rgba(96,165,250,0.2)' : 'rgba(96,165,250,0.06)',
+              border: sourceProvince === 'sea' ? '2px solid rgba(96,165,250,0.5)' : '2px dashed rgba(96,165,250,0.2)',
               borderRadius: '4px', cursor: 'pointer', zIndex: 8,
             }}
           />

@@ -360,18 +360,22 @@ async def websocket_endpoint(ws: WebSocket, game_id: str):
                 updated_game.pop("_scout_result", None)
                 updated_game.pop("_shugenja_result", None)
                 updated_game.pop("_scorpion_result", None)
+                territory_card_played = updated_game.pop("_territory_card_played", None)
                 await db.games.replace_one({"game_id": game_id}, updated_game)
                 # Broadcast to all
                 await ws_manager.broadcast_state(game_id)
                 await ws.send_json({"type": "action_result", "success": True, "message": message})
-                # Send notification if round changed
+                # Send notification for major events
                 if "begins" in message or "resolved" in message or "revealed" in message:
                     await ws_manager.send_notification(game_id, message)
-                # Send shugenja result to ALL players (everyone sees the reveal)
+                # Broadcast shugenja result to all
                 if action.get("action") == "use_shugenja":
                     shugenja_res = game.get("_shugenja_result")
                     if shugenja_res:
                         await ws_manager.send_notification(game_id, f"Shugenja revealed: {shugenja_res['token']['type']} {shugenja_res['token']['strength']}")
+                # Broadcast territory card play to all
+                if territory_card_played:
+                    await ws_manager.send_notification(game_id, f"territory_card|{territory_card_played['card_name']}|{territory_card_played['card_description']}|{territory_card_played['clan']}")
             else:
                 await ws.send_json({"type": "action_result", "success": False, "message": message})
 

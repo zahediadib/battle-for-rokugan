@@ -183,6 +183,14 @@ def process_action(game, user_id, action):
         return process_unicorn_ability(game, player_idx, action)
     elif action_type == "edit_positions":
         return process_edit_positions(game, player_idx, action)
+    elif action_type == "dragon_return_token":
+        return process_dragon_return(game, player_idx, action)
+    elif action_type == "admin_skip_turn":
+        return process_admin_skip_turn(game, player_idx)
+    elif action_type == "admin_end_game":
+        return process_admin_end_game(game, player_idx)
+    elif action_type == "admin_force_proceed":
+        return process_admin_force_proceed(game, player_idx)
     elif action_type == "select_token":
         return True, "Token selected", game
     else:
@@ -379,8 +387,13 @@ def process_place_combat_token(game, player_idx, action):
         return False, "Not your turn", game
 
     player = game["players"][player_idx]
+
+    # Dragon must return token first
+    if player.get("dragon_must_return"):
+        return False, "Dragon must return a token first", game
+
     token_id = action.get("token_id")
-    target_type = action.get("target_type")  # "province" or "border"
+    target_type = action.get("target_type")  # "province" or "border" or "blessing"
     target_id = action.get("target_id")
 
     # Must have at least 2 tokens (keep 1 at end)
@@ -398,19 +411,19 @@ def process_place_combat_token(game, player_idx, action):
 
     # Blessing special case
     if token["type"] == "blessing":
-        # Must be placed on a facedown token of the same player
-        province_id = action.get("target_province_id", target_id)
         blessing_target_id = action.get("blessing_target_id")
         placed = False
         # Check province combat tokens
-        if province_id in game["provinces"]:
-            for ct in game["provinces"][province_id]["combat_tokens"]:
+        for prov_id, prov in game["provinces"].items():
+            for ct in prov["combat_tokens"]:
                 if ct.get("id") == blessing_target_id and ct["player_index"] == player_idx:
                     if ct["type"] in ("army", "navy", "shinobi") and not ct.get("face_up", False):
                         ct["blessing"] = {"id": token["id"], "strength": token["strength"]}
-                        ct["face_up"] = True  # blessing is face-up
+                        ct["face_up"] = True
                         placed = True
                         break
+            if placed:
+                break
         # Check borders
         if not placed:
             for bid, bstate in game["borders"].items():
@@ -427,11 +440,16 @@ def process_place_combat_token(game, player_idx, action):
         advance_placement_turn(game)
         return True, "Blessing placed", game
 
+    # ANY token type can be placed in province center or on a border
+    # Players can bluff by placing any token anywhere (server validates at resolution)
+
+    if target_type == "blessing":
+        # Handled above - this shouldn't be reached
+        return False, "Blessing must target a placed token", game
+
     if target_type == "province":
-        # Placing in province center (defense, shinobi, diplomacy, raid)
         if target_id not in game["provinces"]:
             return False, f"Invalid province: {target_id}", game
-        province = game["provinces"][target_id]
 
         combat_token = {
             "id": token["id"],
@@ -441,7 +459,7 @@ def process_place_combat_token(game, player_idx, action):
             "face_up": False,
             "blessing": None,
         }
-        province["combat_tokens"].append(combat_token)
+        game["provinces"][target_id]["combat_tokens"].append(combat_token)
         player["hand"].remove(token)
         player["tokens_placed_this_round"] += 1
         advance_placement_turn(game)
@@ -575,9 +593,22 @@ def resolve_battles(game):
 
 
 def remove_bluffs(game):
-    """Remove bluff tokens (return to player's hand for next round)."""
+    """Remove bluff tokens. Lion's bluff has +2 defense and stays when defending."""
     for prov_id, prov in game["provinces"].items():
-        prov["combat_tokens"] = [ct for ct in prov["combat_tokens"] if ct["type"] != "bluff"]
+        new_tokens = []
+        for ct in prov["combat_tokens"]:
+            if ct["type"] == "bluff":
+                # Lion ability: bluff stays as +2 defense when placed in controlled province
+                is_lion = ct["player_index"] < len(game["players"]) and game["players"][ct["player_index"]].get("clan") == "lion"
+                is_defending = prov["controlled_by"] == ct["player_index"]
+                if is_lion and is_defending:
+                    ct["strength"] = 2  # Lion bluff = +2 defense
+                    new_tokens.append(ct)
+                    continue
+                # Normal bluff: discard
+                continue
+            new_tokens.append(ct)
+        prov["combat_tokens"] = new_tokens
     for border_id, border in game["borders"].items():
         if border["combat_token"] and border["combat_token"]["type"] == "bluff":
             border["combat_token"] = None
@@ -707,10 +738,18 @@ def resolve_all_province_battles(game):
         defender_idx = prov.get("controlled_by")
         defender_strength = 0
 
-        # Province base defense
+        # Province base defense (Phoenix ignores capital defense)
         prov_data = PROVINCE_MAP.get(prov_id, {})
         if prov_data.get("isCapital"):
-            defender_strength += prov_data.get("baseDefense", 0)
+            # Check if any attacker is Phoenix - they ignore capital base defense
+            any_phoenix_attacker = any(
+                pi < len(game["players"]) and game["players"][pi].get("clan") == "phoenix"
+                for pi in attackers.keys()
+            )
+            if not any_phoenix_attacker:
+                defender_strength += prov_data.get("baseDefense", 0)
+            else:
+                game["log"].append(f"Phoenix ignores capital defense in {prov_id}!")
 
         # Defense from face-up control tokens (+1 each, +2 for Crab)
         for ct in prov["control_tokens"]:
@@ -1331,13 +1370,22 @@ def process_play_territory_card(game, player_idx, action):
 
     # Mark card as used
     terr["card_used"] = True
-    card_name = terr["card"]["name"] if terr["card"] else "Unknown"
+    card = terr["card"]
+    card_name = card["name"] if card else "Unknown"
+    card_desc = card.get("description", "") if card else ""
     clan_name = player["clan"]
-    game["log"].append(f"{clan_name} played territory card: {card_name}")
+    game["log"].append(f"{clan_name} played territory card: {card_name} - {card_desc}")
 
-    # Note: Actual card effects would require complex multi-step interactions
-    # For now we mark it as used and log it. Full effects require additional UI flows.
-    return True, f"Territory card played: {card_name}", game
+    # Store for broadcast notification to all players
+    game["_territory_card_played"] = {
+        "player_index": player_idx,
+        "clan": clan_name,
+        "card_name": card_name,
+        "card_description": card_desc,
+        "territory_id": territory_id,
+    }
+
+    return True, f"territory_card|{card_name}|{card_desc}|{clan_name}", game
 
 
 def process_edit_positions(game, player_idx, action):
@@ -1356,3 +1404,91 @@ def process_edit_positions(game, player_idx, action):
 
 
 import json  # needed for scout result serialization
+
+
+def process_dragon_return(game, player_idx, action):
+    """Dragon must return 1 non-bluff token to pool after drawing extra."""
+    player = game["players"][player_idx]
+    if player["clan"] != "dragon":
+        return False, "Only Dragon can use this", game
+    if not player.get("dragon_must_return"):
+        return False, "No token needs to be returned", game
+
+    token_id = action.get("token_id")
+    token = None
+    for t in player["hand"]:
+        if t["id"] == token_id and t["type"] != "bluff":
+            token = t
+            break
+    if not token:
+        return False, "Invalid token (cannot return bluff)", game
+
+    player["hand"].remove(token)
+    player["token_pool"].append(token)
+    player["dragon_must_return"] = False
+    game["log"].append(f"Dragon returned a token to pool.")
+    return True, "Token returned to pool", game
+
+
+# ===== Admin/Host Actions =====
+
+def process_admin_skip_turn(game, player_idx):
+    """Host skips current player's turn."""
+    if game["players"][player_idx]["user_id"] != game["host_user_id"]:
+        return False, "Only host can skip turns", game
+
+    current = game["current_turn_index"]
+    clan_name = game["players"][current]["clan"]
+
+    if game["phase"] == "placement":
+        # Place nothing, advance turn
+        advance_placement_turn(game)
+        game["log"].append(f"Host skipped {clan_name}'s turn.")
+        return True, f"Skipped {clan_name}'s turn", game
+    elif game["phase"] == "setup":
+        advance_setup_turn(game)
+        game["log"].append(f"Host skipped {clan_name}'s setup turn.")
+        return True, f"Skipped {clan_name}'s setup turn", game
+    elif game["phase"] == "upkeep":
+        game["players"][current]["passed_territory_card"] = True
+        if all(p["passed_territory_card"] for p in game["players"]):
+            game["phase"] = "placement"
+            game["log"].append("All players passed. Placement begins.")
+        else:
+            advance_upkeep_turn(game)
+        game["log"].append(f"Host skipped {clan_name}'s upkeep turn.")
+        return True, f"Skipped {clan_name}'s upkeep turn", game
+
+    return False, "Cannot skip turn in current phase", game
+
+
+def process_admin_end_game(game, player_idx):
+    """Host forces game to end immediately with current scores."""
+    if game["players"][player_idx]["user_id"] != game["host_user_id"]:
+        return False, "Only host can end the game", game
+    end_game(game)
+    game["log"].append("Host ended the game early.")
+    return True, "Game ended by host", game
+
+
+def process_admin_force_proceed(game, player_idx):
+    """Host forces game to proceed to next phase regardless of state."""
+    if game["players"][player_idx]["user_id"] != game["host_user_id"]:
+        return False, "Only host can force proceed", game
+
+    if game["phase"] == "upkeep":
+        game["phase"] = "placement"
+        for p in game["players"]:
+            p["passed_territory_card"] = True
+        game["log"].append("Host forced transition to placement phase.")
+        return True, "Forced to placement phase", game
+    elif game["phase"] == "placement":
+        game["phase"] = "resolution"
+        game["resolution_revealed"] = False
+        game["resolution_step"] = 0
+        game["log"].append("Host forced transition to resolution phase.")
+        return True, "Forced to resolution phase", game
+    elif game["phase"] == "resolution":
+        return process_proceed(game, player_idx)
+
+    return False, "Cannot force proceed in current state", game

@@ -1,39 +1,15 @@
 import React, { useState } from 'react';
-import { Crown, MapPin, Star, Shield, Eye, ChevronRight, Scroll } from 'lucide-react';
+import { Crown, MapPin, Star, Shield, Eye, ChevronRight, Scroll, Search, Flame, SkipForward, XCircle, FastForward, Settings } from 'lucide-react';
 import { ScrollArea } from '../../components/ui/scroll-area';
+import { CLANS, TERRITORY_LABELS } from '../../constants/gameConstants';
 
-const CLAN_LABELS = {
-  crab: 'Crab', crane: 'Crane', dragon: 'Dragon', lion: 'Lion',
-  phoenix: 'Phoenix', scorpion: 'Scorpion', unicorn: 'Unicorn',
-};
-
-const CLAN_ABILITIES = {
-  crab: 'Face-up control tokens have +2 defense instead of +1.',
-  crane: 'When tied in battle, you win instead.',
-  dragon: 'Draw 1 additional combat token, return 1 non-bluff token.',
-  lion: 'Bluff token has +2 defense and is not discarded when defending.',
-  phoenix: 'Ignore clan capital defenses when attacking.',
-  scorpion: 'Once per round, look at one combat token on the board.',
-  unicorn: 'Before reveal, switch positions of two of your combat tokens.',
-};
-
-const TERRITORY_LABELS = {
-  shadowland_bottom: 'Shadowlands (South)',
-  shadowland_top: 'Shadowlands (North)',
-  crab: 'Crab Lands',
-  wind: 'Wind Lands',
-  crane: 'Crane Lands',
-  lion: 'Lion Lands',
-  scorpion: 'Scorpion Lands',
-  unicorn: 'Unicorn Lands',
-  dragon: 'Dragon Lands',
-  phoenix: 'Phoenix Lands',
-  island: 'Island',
-};
+const CLAN_ABILITIES = Object.fromEntries(Object.entries(CLANS).map(([k, v]) => [k, v.ability]));
+const CLAN_LABELS = Object.fromEntries(Object.entries(CLANS).map(([k, v]) => [k, v.name]));
 
 export default function StatusPanel({ gameState, myPlayerIndex, isHost, sendAction }) {
   const [expandedClan, setExpandedClan] = useState(null);
   const [showLog, setShowLog] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
 
   const isResolution = gameState.phase === 'resolution';
   const canProceed = isHost && isResolution;
@@ -47,7 +23,7 @@ export default function StatusPanel({ gameState, myPlayerIndex, isHost, sendActi
             <div className="glass-panel rounded-sm p-3">
               <div className="text-[10px] text-[#A1A1AA] uppercase tracking-wider font-bold mb-1">Current Turn</div>
               {gameState.players[gameState.current_turn_index] && (
-                <div className={`font-heading text-lg font-bold clan-${gameState.players[gameState.current_turn_index].clan}`}>
+                <div className="font-heading text-lg font-bold" style={{ color: CLANS[gameState.players[gameState.current_turn_index].clan]?.color }}>
                   {CLAN_LABELS[gameState.players[gameState.current_turn_index].clan] || 'Unknown'}
                 </div>
               )}
@@ -63,14 +39,14 @@ export default function StatusPanel({ gameState, myPlayerIndex, isHost, sendActi
               <div className="text-[10px] text-[#A1A1AA] uppercase tracking-wider font-bold mb-1">Setup Phase</div>
               <p className="text-xs text-[#F5F5F0]">Place control tokens in empty provinces.</p>
               {gameState.players[gameState.current_turn_index] && (
-                <p className="text-xs text-[#D4AF37] mt-1 font-bold">
+                <p className="text-xs mt-1 font-bold" style={{ color: gameState.current_turn_index === myPlayerIndex ? '#D4AF37' : '#A1A1AA' }}>
                   {gameState.current_turn_index === myPlayerIndex ? 'Your turn!' : `${CLAN_LABELS[gameState.players[gameState.current_turn_index].clan]}'s turn`}
                 </p>
               )}
             </div>
           )}
 
-          {/* Upkeep phase - territory card playing */}
+          {/* Upkeep phase */}
           {gameState.phase === 'upkeep' && myPlayerIndex >= 0 && (
             <div className="glass-panel rounded-sm p-3">
               <div className="text-[10px] text-[#60A5FA] uppercase tracking-wider font-bold mb-1">Upkeep Phase</div>
@@ -87,7 +63,7 @@ export default function StatusPanel({ gameState, myPlayerIndex, isHost, sendActi
             </div>
           )}
 
-          {/* Proceed button for resolution */}
+          {/* Proceed button */}
           {canProceed && (
             <button
               data-testid="proceed-btn"
@@ -100,51 +76,103 @@ export default function StatusPanel({ gameState, myPlayerIndex, isHost, sendActi
             </button>
           )}
 
+          {/* Host Admin Panel */}
+          {isHost && gameState.status === 'playing' && (
+            <div>
+              <button
+                onClick={() => setShowAdmin(!showAdmin)}
+                className="w-full flex items-center gap-1.5 text-[10px] text-[#F57C00] uppercase tracking-wider font-bold px-1 hover:text-[#FB923C] transition-colors"
+                data-testid="admin-panel-toggle"
+              >
+                <Settings className="w-3 h-3" /> Host Controls {showAdmin ? '(hide)' : '(show)'}
+              </button>
+              {showAdmin && (
+                <div className="mt-2 space-y-1.5 animate-fade-in-up">
+                  <button
+                    data-testid="admin-skip-turn"
+                    onClick={() => sendAction({ action: 'admin_skip_turn' })}
+                    className="w-full flex items-center gap-1.5 px-3 py-2 bg-[#F57C00]/10 hover:bg-[#F57C00]/20 border border-[#F57C00]/30 rounded-sm text-xs text-[#F57C00] font-bold transition-colors"
+                  >
+                    <SkipForward className="w-3.5 h-3.5" /> Skip Current Turn
+                  </button>
+                  <button
+                    data-testid="admin-force-proceed"
+                    onClick={() => sendAction({ action: 'admin_force_proceed' })}
+                    className="w-full flex items-center gap-1.5 px-3 py-2 bg-[#D4AF37]/10 hover:bg-[#D4AF37]/20 border border-[#D4AF37]/30 rounded-sm text-xs text-[#D4AF37] font-bold transition-colors"
+                  >
+                    <FastForward className="w-3.5 h-3.5" /> Force Next Phase
+                  </button>
+                  <button
+                    data-testid="admin-end-game"
+                    onClick={() => { if (window.confirm('End the game now? Scores will be calculated with current state.')) sendAction({ action: 'admin_end_game' }); }}
+                    className="w-full flex items-center gap-1.5 px-3 py-2 bg-[#D32F2F]/10 hover:bg-[#D32F2F]/20 border border-[#D32F2F]/30 rounded-sm text-xs text-[#D32F2F] font-bold transition-colors"
+                  >
+                    <XCircle className="w-3.5 h-3.5" /> End Game Now
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Players */}
           <div>
             <div className="text-[10px] text-[#A1A1AA] uppercase tracking-wider font-bold mb-2 px-1">Players</div>
             <div className="space-y-1.5">
-              {gameState.players?.map((player, idx) => (
-                <div
-                  key={idx}
-                  data-testid={`player-status-${idx}`}
-                  onClick={() => setExpandedClan(expandedClan === idx ? null : idx)}
-                  className={`glass-panel rounded-sm p-2.5 cursor-pointer hover:border-white/20 transition-all ${
-                    idx === gameState.current_turn_index ? 'border-[#D4AF37]/30' : ''
-                  } ${idx === myPlayerIndex ? 'bg-white/5' : ''}`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-3 h-3 rounded-full`} style={{ backgroundColor: getClanColorHex(player.clan) }} />
-                      <span className={`font-heading text-sm font-bold clan-${player.clan}`}>
-                        {CLAN_LABELS[player.clan] || player.username}
-                      </span>
-                      {idx === gameState.first_player_index && <Crown className="w-3 h-3 text-[#D4AF37]" />}
+              {gameState.players?.map((player, idx) => {
+                const clanInfo = CLANS[player.clan];
+                return (
+                  <div
+                    key={idx}
+                    data-testid={`player-status-${idx}`}
+                    onClick={() => setExpandedClan(expandedClan === idx ? null : idx)}
+                    className={`glass-panel rounded-sm p-2.5 cursor-pointer hover:border-white/20 transition-all ${
+                      idx === gameState.current_turn_index ? 'border-[#D4AF37]/30' : ''
+                    } ${idx === myPlayerIndex ? 'bg-white/5' : ''}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: clanInfo?.color || '#666' }} />
+                        <span className="font-heading text-sm font-bold" style={{ color: clanInfo?.color || '#FFF' }}>
+                          {clanInfo?.name || player.username}
+                        </span>
+                        {idx === gameState.first_player_index && <Crown className="w-3 h-3 text-[#D4AF37]" />}
+                      </div>
+                      <div className="flex items-center gap-2 text-[10px]">
+                        <span className="flex items-center gap-0.5 text-[#D4AF37]">
+                          <Star className="w-3 h-3" /> {player.live_honor || 0}
+                        </span>
+                        <span className="flex items-center gap-0.5 text-[#A1A1AA]">
+                          <MapPin className="w-3 h-3" /> {player.provinces_controlled || 0}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 text-[10px]">
-                      <span className="flex items-center gap-0.5 text-[#D4AF37]">
-                        <Star className="w-3 h-3" /> {player.live_honor || 0}
-                      </span>
-                      <span className="flex items-center gap-0.5 text-[#A1A1AA]">
-                        <MapPin className="w-3 h-3" /> {player.provinces_controlled || 0}
-                      </span>
-                    </div>
-                  </div>
 
-                  {/* Expanded info */}
-                  {expandedClan === idx && (
-                    <div className="mt-2 pt-2 border-t border-white/10 text-xs space-y-1 animate-fade-in-up">
-                      <p className="text-[#A1A1AA]">Hand: {player.hand_count || 0} tokens</p>
-                      <p className="text-[#A1A1AA]">Pool: {player.token_pool_count || 0} remaining</p>
-                      <p className="text-[#A1A1AA]">Scout: {player.scout_cards}, Shugenja: {player.shugenja_cards}</p>
-                      {player.is_ronin && <p className="text-[#F57C00] font-bold">RONIN</p>}
-                      {player.clan && (
-                        <p className="text-[#A1A1AA] italic mt-1">{CLAN_ABILITIES[player.clan]}</p>
-                      )}
+                    {/* Scout/Shugenja status - visible to all */}
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <span className="flex items-center gap-0.5 text-[9px]" title="Scout cards remaining">
+                        <Search className="w-2.5 h-2.5 text-[#60A5FA]" />
+                        <span className="text-[#60A5FA]">{player.scout_cards}</span>
+                      </span>
+                      <span className="flex items-center gap-0.5 text-[9px]" title="Shugenja cards remaining">
+                        <Flame className="w-2.5 h-2.5 text-[#C41E3A]" />
+                        <span className="text-[#C41E3A]">{player.shugenja_cards}</span>
+                      </span>
+                      <span className="text-[9px] text-[#A1A1AA]">Hand: {player.hand_count || 0}</span>
+                      {player.is_ronin && <span className="text-[9px] text-[#F57C00] font-bold">RONIN</span>}
                     </div>
-                  )}
-                </div>
-              ))}
+
+                    {expandedClan === idx && (
+                      <div className="mt-2 pt-2 border-t border-white/10 text-xs space-y-1 animate-fade-in-up">
+                        <p className="text-[#A1A1AA]">Pool: {player.token_pool_count || 0} remaining</p>
+                        <p className="text-[#A1A1AA]">Discarded: {player.discard_count || 0}</p>
+                        {player.clan && (
+                          <p className="text-[#A1A1AA] italic mt-1">{CLAN_ABILITIES[player.clan]}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -158,7 +186,8 @@ export default function StatusPanel({ gameState, myPlayerIndex, isHost, sendActi
                 const isOwner = terr.card_owner === myPlayerIndex;
                 const canPlay = isOwner && !terr.card_used && (gameState.phase === 'upkeep' || gameState.phase === 'placement');
                 return (
-                  <div key={tid} className={`px-2 py-1.5 bg-white/5 rounded-sm text-xs ${canPlay ? 'hover:bg-white/10 cursor-pointer' : ''}`}
+                  <div key={tid}
+                    className={`px-2 py-1.5 bg-white/5 rounded-sm text-xs transition-all ${canPlay ? 'hover:bg-[#D4AF37]/10 hover:border-[#D4AF37]/30 cursor-pointer border border-transparent' : ''}`}
                     onClick={() => canPlay && sendAction({ action: 'play_territory_card', territory_id: tid })}
                     data-testid={`territory-card-${tid}`}
                   >
@@ -166,9 +195,8 @@ export default function StatusPanel({ gameState, myPlayerIndex, isHost, sendActi
                       <span className="text-[#A1A1AA]">{TERRITORY_LABELS[tid] || tid}</span>
                       <span className={`font-bold ${
                         terr.card_used ? 'text-[#A1A1AA] line-through' :
-                        terr.card_owner !== null ? `clan-${gameState.players[terr.card_owner]?.clan}` :
-                        'text-[#A1A1AA]'
-                      }`}>
+                        terr.card_owner !== null ? '' : 'text-[#A1A1AA]'
+                      }`} style={{ color: terr.card_owner !== null && !terr.card_used ? CLANS[gameState.players[terr.card_owner]?.clan]?.color : undefined }}>
                         {terr.card_used ? 'Used' :
                          terr.card_owner !== null ? CLAN_LABELS[gameState.players[terr.card_owner]?.clan] || 'Claimed' :
                          'Free'}
@@ -178,7 +206,7 @@ export default function StatusPanel({ gameState, myPlayerIndex, isHost, sendActi
                       <div className="mt-1 text-[10px] text-[#D4AF37]">{terr.card.name}</div>
                     )}
                     {canPlay && (
-                      <div className="mt-1 text-[9px] text-[#C41E3A] font-bold uppercase">Click to play</div>
+                      <div className="mt-1 text-[9px] text-[#C41E3A] font-bold uppercase tracking-wider animate-pulse">Play Card</div>
                     )}
                   </div>
                 );
@@ -210,7 +238,7 @@ export default function StatusPanel({ gameState, myPlayerIndex, isHost, sendActi
               <div className="text-[10px] text-[#D4AF37] uppercase tracking-wider font-bold mb-2">Final Scores</div>
               {gameState.scores.map((score, idx) => (
                 <div key={idx} className="flex items-center justify-between py-1">
-                  <span className={`font-heading font-bold clan-${score.clan}`}>{idx + 1}. {CLAN_LABELS[score.clan]}</span>
+                  <span className="font-heading font-bold" style={{ color: CLANS[score.clan]?.color }}>{idx + 1}. {CLANS[score.clan]?.name}</span>
                   <span className="text-[#D4AF37] font-bold">{score.honor} Honor</span>
                 </div>
               ))}
@@ -220,12 +248,4 @@ export default function StatusPanel({ gameState, myPlayerIndex, isHost, sendActi
       </ScrollArea>
     </div>
   );
-}
-
-function getClanColorHex(clan) {
-  const colors = {
-    crab: '#9CA3AF', crane: '#60A5FA', dragon: '#34D399', lion: '#FBBF24',
-    phoenix: '#FB923C', scorpion: '#F87171', unicorn: '#A78BFA',
-  };
-  return colors[clan] || '#666';
 }

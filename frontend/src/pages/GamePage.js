@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { GameProvider, useGame } from '../contexts/GameContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -7,7 +7,67 @@ import PlayerHand from '../components/game/PlayerHand';
 import StatusPanel from '../components/game/StatusPanel';
 import ClanSelect from '../components/game/ClanSelect';
 import { AbilityModal, AbilityButtons } from '../components/game/AbilityModal';
-import { Volume2, VolumeX, X, Wifi, WifiOff, Move, Lock } from 'lucide-react';
+import ProvinceInfoPopup from '../components/game/ProvinceInfoPopup';
+import { Volume2, VolumeX, X, Wifi, WifiOff } from 'lucide-react';
+import { CLANS } from '../constants/gameConstants';
+
+// Big announcement modal for game events
+function AnnouncementModal({ announcement, onClose }) {
+  if (!announcement) return null;
+  return (
+    <div className="fixed inset-0 z-[95] flex items-center justify-center" data-testid="announcement-modal">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative z-10 max-w-lg w-full mx-4 animate-scale-in">
+        <div className="glass-panel rounded-sm p-8 text-center">
+          {announcement.image && (
+            <img src={announcement.image} alt="" className="w-32 h-32 object-contain mx-auto mb-4 drop-shadow-[0_0_20px_rgba(212,175,55,0.3)]"
+              onError={e => { e.target.style.display = 'none'; }} />
+          )}
+          <h2 className="font-heading text-2xl font-black mb-3" style={{ color: announcement.color || '#D4AF37' }}>
+            {announcement.title}
+          </h2>
+          <p className="text-[#A1A1AA] text-sm mb-2">{announcement.message}</p>
+          {announcement.detail && (
+            <div className="mt-3 p-3 bg-white/5 rounded-sm text-sm text-[#F5F5F0]">{announcement.detail}</div>
+          )}
+          <button onClick={onClose} data-testid="announcement-close"
+            className="mt-6 px-8 py-2 bg-[#C41E3A] hover:bg-[#A01830] text-white font-bold uppercase tracking-wider rounded-sm transition-colors text-sm">
+            Continue
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Secret objective detail modal
+function ObjectiveDetailModal({ objectiveId, onClose }) {
+  const [objectives, setObjectives] = useState([]);
+  useEffect(() => {
+    fetch(`${process.env.REACT_APP_BACKEND_URL}/api/game-data/objectives`)
+      .then(r => r.json()).then(setObjectives).catch(() => {});
+  }, []);
+  if (!objectiveId) return null;
+  const obj = objectives.find(o => o.id === objectiveId);
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center" onClick={onClose} data-testid="objective-detail-modal">
+      <div className="absolute inset-0 bg-black/60" />
+      <div className="relative z-10 glass-panel rounded-sm p-6 max-w-md w-full mx-4 animate-scale-in" onClick={e => e.stopPropagation()}>
+        <h3 className="font-heading text-xl font-bold text-[#D4AF37] mb-3">Secret Objective</h3>
+        {obj ? (
+          <>
+            <h4 className="font-heading text-lg font-bold text-[#F5F5F0] mb-2">{obj.name}</h4>
+            <p className="text-sm text-[#A1A1AA] mb-3">{obj.description}</p>
+            <div className="text-[#D4AF37] font-bold text-xl">+{obj.honor} Honor</div>
+          </>
+        ) : (
+          <p className="text-[#A1A1AA] capitalize">{objectiveId?.replace(/_/g, ' ')}</p>
+        )}
+        <button onClick={onClose} className="mt-4 px-6 py-2 bg-white/10 hover:bg-white/20 text-white rounded-sm text-sm font-bold uppercase">Close</button>
+      </div>
+    </div>
+  );
+}
 
 function GameContent() {
   const { gameState, connected, sendAction, notifications, dismissNotification, user } = useGame();
@@ -16,13 +76,13 @@ function GameContent() {
   const [sourceProvince, setSourceProvince] = useState(null);
   const [musicPlaying, setMusicPlaying] = useState(false);
   const audioRef = useRef(null);
-
-  // Ability modal state
-  const [abilityMode, setAbilityMode] = useState(null); // 'scout' | 'shugenja' | 'scorpion' | null
+  const [abilityMode, setAbilityMode] = useState(null);
   const [abilityModal, setAbilityModal] = useState({ open: false, type: null, result: null });
-
-  // Edit mode state
-  const [editMode, setEditMode] = useState(false);
+  const [selectedProvinceInfo, setSelectedProvinceInfo] = useState(null);
+  const [announcement, setAnnouncement] = useState(null);
+  const [objectiveDetail, setObjectiveDetail] = useState(null);
+  // Blessing targeting
+  const [blessingMode, setBlessingMode] = useState(null); // token to place as blessing
 
   const toggleMusic = () => {
     if (audioRef.current) {
@@ -32,44 +92,72 @@ function GameContent() {
     }
   };
 
-  // Handle shugenja results from game state (broadcast to all)
+  // Handle shugenja results (broadcast to all)
   useEffect(() => {
     if (gameState?.shugenja_result) {
-      setAbilityModal({
-        open: true,
-        type: 'shugenja',
-        result: gameState.shugenja_result,
+      const r = gameState.shugenja_result;
+      const actorClan = gameState.players[r.actor]?.clan;
+      setAnnouncement({
+        title: 'Shugenja Invoked!',
+        message: `${CLANS[actorClan]?.name || 'Unknown'} used Shugenja`,
+        detail: `Revealed and destroyed: ${r.token.type} ${r.token.strength}`,
+        color: '#C41E3A',
+        image: '/assets/shugenja.png',
       });
     }
   }, [gameState?.shugenja_result]);
 
-  // Listen for scout/scorpion results in notifications
+  // Listen for scout/scorpion results + territory card plays in notifications
   useEffect(() => {
     const latest = notifications[notifications.length - 1];
-    if (latest && !latest.isError) {
-      if (latest.message?.startsWith('Scout used|')) {
-        try {
-          const tokenData = JSON.parse(latest.message.split('|')[1]);
-          setAbilityModal({ open: true, type: 'scout', result: { token: tokenData } });
-          dismissNotification(latest.id);
-        } catch (e) {}
-      } else if (latest.message?.startsWith('Scorpion spy|')) {
-        try {
-          const tokenData = JSON.parse(latest.message.split('|')[1]);
-          setAbilityModal({ open: true, type: 'scorpion', result: { token: tokenData } });
-          dismissNotification(latest.id);
-        } catch (e) {}
-      }
+    if (!latest || latest.isError) return;
+    const msg = latest.message || '';
+
+    if (msg.startsWith('Scout used|')) {
+      try {
+        const tokenData = JSON.parse(msg.split('|')[1]);
+        setAnnouncement({
+          title: 'Scout Deployed',
+          message: 'You peeked at a hidden token',
+          detail: `Found: ${tokenData.type} ${tokenData.strength}`,
+          color: '#60A5FA',
+          image: '/assets/scout.png',
+        });
+      } catch (e) {}
+      dismissNotification(latest.id);
+    } else if (msg.startsWith('Scorpion spy|')) {
+      try {
+        const tokenData = JSON.parse(msg.split('|')[1]);
+        setAnnouncement({
+          title: 'Scorpion Spy',
+          message: 'The shadows reveal their secrets...',
+          detail: `Found: ${tokenData.type} ${tokenData.strength}`,
+          color: '#F87171',
+          image: '/assets/scorpion.png',
+        });
+      } catch (e) {}
+      dismissNotification(latest.id);
+    } else if (msg.startsWith('territory_card|')) {
+      try {
+        const parts = msg.split('|');
+        const cardName = parts[1];
+        const cardDesc = parts[2];
+        const clanName = parts[3];
+        setAnnouncement({
+          title: `${clanName} played a Territory Card!`,
+          message: cardName,
+          detail: cardDesc,
+          color: '#D4AF37',
+        });
+      } catch (e) {}
+      dismissNotification(latest.id);
     }
   }, [notifications, dismissNotification]);
 
   if (!gameState) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0A0A0A]" data-testid="game-loading">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-[#C41E3A] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-[#A1A1AA] font-heading text-lg">Loading game...</p>
-        </div>
+        <div className="w-12 h-12 border-4 border-[#C41E3A] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
       </div>
     );
   }
@@ -82,128 +170,130 @@ function GameContent() {
   if (gameState.status === 'clan_selection') {
     return <ClanSelect gameState={gameState} myPlayer={myPlayer} sendAction={sendAction} isSpectator={isSpectator} />;
   }
-
   if (gameState.status === 'objective_selection') {
     return <ObjectiveSelect gameState={gameState} myPlayer={myPlayer} sendAction={sendAction} isSpectator={isSpectator} />;
   }
 
   const handleProvinceClick = (provinceId) => {
-    // Ability targeting mode (scout/shugenja/scorpion)
+    // Ability targeting
     if (abilityMode) {
-      const actionMap = {
-        scout: 'use_scout',
-        shugenja: 'use_shugenja',
-        scorpion: 'use_scorpion_ability',
-      };
-      sendAction({
-        action: actionMap[abilityMode],
-        target_location: 'province',
-        target_id: provinceId,
-      });
-      // For scout/scorpion, the result comes back in action_result message
-      if (abilityMode === 'scout' || abilityMode === 'scorpion') {
-        // We'll parse the result from the action_result message
-        const handler = (event) => {
-          // This is handled via the GameContext notifications
-        };
-      }
+      sendAction({ action: { scout: 'use_scout', shugenja: 'use_shugenja', scorpion: 'use_scorpion_ability' }[abilityMode], target_location: 'province', target_id: provinceId });
       setAbilityMode(null);
       return;
     }
 
-    // Setup phase: place control token
+    // Blessing targeting: click a placed token
+    if (blessingMode) {
+      // Find a token belonging to me in this province
+      const provState = gameState.provinces?.[provinceId];
+      const myToken = provState?.combat_tokens?.find(ct => ct.player_index === myPlayerIndex && ct.type !== 'hidden');
+      if (myToken) {
+        sendAction({
+          action: 'place_combat_token', token_id: blessingMode.id,
+          target_type: 'blessing', blessing_target_id: myToken.id, target_province_id: provinceId,
+        });
+        setBlessingMode(null); setSelectedToken(null);
+        return;
+      }
+    }
+
+    // Setup phase
     if (gameState.status === 'setup' && gameState.phase === 'setup') {
       if (myPlayerIndex === gameState.current_turn_index) {
         sendAction({ action: 'place_control_token', province_id: provinceId });
+        return;
       }
+    }
+
+    // Placement: token selected
+    if (gameState.phase === 'placement' && selectedToken) {
+      if (placementStep === 'select_target') {
+        if (provinceId === sourceProvince) {
+          // Place in province center (defense)
+          sendAction({ action: 'place_combat_token', token_id: selectedToken.id, target_type: 'province', target_id: provinceId });
+        } else if (sourceProvince === 'sea') {
+          // Navy from sea: find the sea border for this coastal province
+          const seaBorderId = findSeaBorder(provinceId);
+          if (seaBorderId) {
+            sendAction({ action: 'place_combat_token', token_id: selectedToken.id, target_type: 'border', target_id: seaBorderId });
+          } else {
+            sendAction({ action: 'place_combat_token', token_id: selectedToken.id, target_type: 'province', target_id: provinceId });
+          }
+        } else {
+          // Attack: find border between source and target
+          const borderId = findBorder(sourceProvince, provinceId);
+          if (borderId) {
+            sendAction({ action: 'place_combat_token', token_id: selectedToken.id, target_type: 'border', target_id: borderId });
+          } else {
+            sendAction({ action: 'place_combat_token', token_id: selectedToken.id, target_type: 'province', target_id: provinceId });
+          }
+        }
+        setSelectedToken(null); setPlacementStep(null); setSourceProvince(null);
+        return;
+      }
+      // First click: set source
+      setSourceProvince(provinceId);
+      setPlacementStep('select_target');
       return;
     }
 
-    // Placement phase: place combat token
-    if (gameState.phase === 'placement' && selectedToken) {
-      if (placementStep === null || placementStep === 'select_source') {
-        if (['shinobi', 'diplomacy', 'raid'].includes(selectedToken.type)) {
-          sendAction({
-            action: 'place_combat_token', token_id: selectedToken.id,
-            target_type: 'province', target_id: provinceId,
-          });
-          setSelectedToken(null); setPlacementStep(null); setSourceProvince(null);
-          return;
-        }
-        if (!sourceProvince) {
-          setSourceProvince(provinceId);
-          setPlacementStep('select_target');
-          return;
-        }
-      }
-      if (placementStep === 'select_target') {
-        if (provinceId === sourceProvince) {
-          sendAction({
-            action: 'place_combat_token', token_id: selectedToken.id,
-            target_type: 'province', target_id: provinceId,
-          });
-        } else {
-          sendAction({
-            action: 'place_combat_token', token_id: selectedToken.id,
-            target_type: 'border', target_id: findBorder(sourceProvince, provinceId) || provinceId,
-          });
-        }
-        setSelectedToken(null); setPlacementStep(null); setSourceProvince(null);
-      }
-    }
+    // No action: show province info
+    setSelectedProvinceInfo(provinceId);
   };
 
   const handleBorderClick = (borderId) => {
     if (abilityMode) {
-      const actionMap = { scout: 'use_scout', shugenja: 'use_shugenja', scorpion: 'use_scorpion_ability' };
-      sendAction({ action: actionMap[abilityMode], target_location: 'border', target_id: borderId });
+      sendAction({ action: { scout: 'use_scout', shugenja: 'use_shugenja', scorpion: 'use_scorpion_ability' }[abilityMode], target_location: 'border', target_id: borderId });
       setAbilityMode(null);
       return;
     }
+    // Blessing on border token
+    if (blessingMode) {
+      const bt = gameState.borders?.[borderId]?.combat_token;
+      if (bt && bt.player_index === myPlayerIndex) {
+        sendAction({
+          action: 'place_combat_token', token_id: blessingMode.id,
+          target_type: 'blessing', blessing_target_id: bt.id, target_id: borderId,
+        });
+        setBlessingMode(null); setSelectedToken(null);
+        return;
+      }
+    }
     if (gameState.phase === 'placement' && selectedToken) {
-      sendAction({
-        action: 'place_combat_token', token_id: selectedToken.id,
-        target_type: 'border', target_id: borderId,
-      });
+      sendAction({ action: 'place_combat_token', token_id: selectedToken.id, target_type: 'border', target_id: borderId });
       setSelectedToken(null); setPlacementStep(null); setSourceProvince(null);
     }
   };
 
   const handleSeaClick = () => {
     if (gameState.phase === 'placement' && selectedToken) {
-      if (selectedToken.type === 'navy' || selectedToken.type === 'bluff') {
-        setSourceProvince('sea');
-        setPlacementStep('select_target');
-      }
+      setSourceProvince('sea');
+      setPlacementStep('select_target');
     }
   };
 
   const handleTokenSelect = (token) => {
+    if (token.type === 'blessing') {
+      // Enter blessing targeting mode
+      setBlessingMode(token);
+      setSelectedToken(token);
+      setPlacementStep(null);
+      setSourceProvince(null);
+      return;
+    }
     if (selectedToken?.id === token.id) {
-      setSelectedToken(null); setPlacementStep(null); setSourceProvince(null);
+      cancelSelection();
     } else {
-      setSelectedToken(token); setPlacementStep('select_source'); setSourceProvince(null);
+      setBlessingMode(null);
+      setSelectedToken(token);
+      setPlacementStep(null);
+      setSourceProvince(null);
     }
   };
 
   const cancelSelection = () => {
     setSelectedToken(null); setPlacementStep(null); setSourceProvince(null);
-    setAbilityMode(null);
-  };
-
-  const handleUseScout = () => {
-    setAbilityMode('scout');
-    setSelectedToken(null); setPlacementStep(null); setSourceProvince(null);
-  };
-
-  const handleUseShugenja = () => {
-    setAbilityMode('shugenja');
-    setSelectedToken(null); setPlacementStep(null); setSourceProvince(null);
-  };
-
-  const handleUseScorpionAbility = () => {
-    setAbilityMode('scorpion');
-    setSelectedToken(null); setPlacementStep(null); setSourceProvince(null);
+    setAbilityMode(null); setBlessingMode(null);
   };
 
   return (
@@ -236,35 +326,17 @@ function GameContent() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          {/* Ability targeting indicator */}
           {abilityMode && (
             <div className="flex items-center gap-2 px-3 py-1 bg-[#C41E3A]/20 border border-[#C41E3A]/40 rounded-sm animate-pulse">
-              <span className="text-xs text-[#C41E3A] font-bold uppercase">
-                Select target for {abilityMode}
-              </span>
+              <span className="text-xs text-[#C41E3A] font-bold uppercase">Select target for {abilityMode}</span>
               <button onClick={cancelSelection} className="text-[#F87171]"><X className="w-3.5 h-3.5" /></button>
             </div>
           )}
-          {/* Edit mode toggle (host only) */}
-          {isHost && gameState.status === 'playing' && (
-            <button
-              data-testid="edit-mode-toggle"
-              onClick={() => {
-                if (editMode) {
-                  // Exiting edit mode - send any position changes
-                  sendAction({ action: 'edit_positions', positions: {} });
-                }
-                setEditMode(!editMode);
-              }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-bold uppercase tracking-wider transition-all duration-300 ${
-                editMode
-                  ? 'bg-[#F57C00] text-black shadow-[0_0_12px_rgba(245,124,0,0.4)] ring-2 ring-[#F57C00]/50'
-                  : 'bg-white/10 text-[#A1A1AA] hover:text-white hover:bg-white/20'
-              }`}
-            >
-              {editMode ? <Lock className="w-3.5 h-3.5" /> : <Move className="w-3.5 h-3.5" />}
-              {editMode ? 'Exit Edit' : 'Edit Mode'}
-            </button>
+          {blessingMode && (
+            <div className="flex items-center gap-2 px-3 py-1 bg-[#D4AF37]/20 border border-[#D4AF37]/40 rounded-sm animate-pulse">
+              <span className="text-xs text-[#D4AF37] font-bold uppercase">Click your token to bless</span>
+              <button onClick={cancelSelection} className="text-[#F87171]"><X className="w-3.5 h-3.5" /></button>
+            </div>
           )}
           {connected ? <Wifi className="w-4 h-4 text-[#2E7D32]" /> : <WifiOff className="w-4 h-4 text-[#D32F2F]" />}
           <button onClick={toggleMusic} className="p-1 hover:bg-white/10 rounded" data-testid="music-toggle">
@@ -276,55 +348,65 @@ function GameContent() {
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
-        <StatusPanel
-          gameState={gameState}
-          myPlayerIndex={myPlayerIndex}
-          isHost={isHost}
-          sendAction={sendAction}
-        />
+        <StatusPanel gameState={gameState} myPlayerIndex={myPlayerIndex} isHost={isHost} sendAction={sendAction} />
         <div className="flex-1 flex flex-col overflow-hidden">
           <GameBoard
-            gameState={gameState}
-            myPlayerIndex={myPlayerIndex}
-            selectedToken={selectedToken}
-            sourceProvince={sourceProvince}
+            gameState={gameState} myPlayerIndex={myPlayerIndex}
+            selectedToken={selectedToken} sourceProvince={sourceProvince}
             placementStep={placementStep}
-            onProvinceClick={handleProvinceClick}
-            onBorderClick={handleBorderClick}
-            onSeaClick={handleSeaClick}
-            abilityMode={abilityMode}
-            editMode={editMode}
+            onProvinceClick={handleProvinceClick} onBorderClick={handleBorderClick} onSeaClick={handleSeaClick}
+            abilityMode={abilityMode} blessingMode={blessingMode}
           />
           {myPlayer && !isSpectator && (
             <div className="h-28 bg-[#161618] border-t border-white/5 px-4 py-2 flex items-center gap-3 shrink-0">
-              <PlayerHand
-                player={myPlayer}
-                gameState={gameState}
-                selectedToken={selectedToken}
-                onTokenSelect={handleTokenSelect}
-                onCancelSelection={cancelSelection}
-              />
-              <AbilityButtons
-                player={myPlayer}
-                gameState={gameState}
-                myPlayerIndex={myPlayerIndex}
-                onUseScout={handleUseScout}
-                onUseShugenja={handleUseShugenja}
-                onUseScorpionAbility={handleUseScorpionAbility}
-              />
+              <PlayerHand player={myPlayer} gameState={gameState} selectedToken={selectedToken}
+                onTokenSelect={handleTokenSelect} onCancelSelection={cancelSelection}
+                onObjectiveClick={() => setObjectiveDetail(myPlayer.secret_objective)} />
+              <AbilityButtons player={myPlayer} gameState={gameState} myPlayerIndex={myPlayerIndex}
+                onUseScout={() => { setAbilityMode('scout'); cancelSelection(); }}
+                onUseShugenja={() => { setAbilityMode('shugenja'); cancelSelection(); }}
+                onUseScorpionAbility={() => { setAbilityMode('scorpion'); cancelSelection(); }} />
             </div>
           )}
         </div>
       </div>
 
+      {/* Province Info Popup */}
+      {selectedProvinceInfo && (
+        <ProvinceInfoPopup provinceId={selectedProvinceInfo} gameState={gameState} onClose={() => setSelectedProvinceInfo(null)} />
+      )}
+
+      {/* Objective Detail */}
+      {objectiveDetail && <ObjectiveDetailModal objectiveId={objectiveDetail} onClose={() => setObjectiveDetail(null)} />}
+
       {/* Ability Modal */}
-      <AbilityModal
-        type={abilityModal.type}
-        isOpen={abilityModal.open}
+      <AbilityModal type={abilityModal.type} isOpen={abilityModal.open}
         onClose={() => setAbilityModal({ open: false, type: null, result: null })}
-        result={abilityModal.result}
-        actorClan={myPlayer?.clan}
-      />
+        result={abilityModal.result} actorClan={myPlayer?.clan} />
+
+      {/* Big Announcement */}
+      <AnnouncementModal announcement={announcement} onClose={() => setAnnouncement(null)} />
+
+      {/* Dragon Return Token Modal */}
+      {myPlayer?.dragon_must_return && myPlayer?.hand && (
+        <div className="fixed inset-0 z-[96] flex items-center justify-center" data-testid="dragon-return-modal">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+          <div className="relative z-10 glass-panel rounded-sm p-6 max-w-lg w-full mx-4 animate-scale-in">
+            <h3 className="font-heading text-xl font-bold text-[#34D399] mb-2">Dragon Ability</h3>
+            <p className="text-sm text-[#A1A1AA] mb-4">You drew an extra token. Select one non-bluff token to return to your pool.</p>
+            <div className="flex flex-wrap gap-3 justify-center">
+              {myPlayer.hand.filter(t => t.type !== 'bluff').map((token, idx) => (
+                <button key={token.id || idx} data-testid={`dragon-return-${token.type}-${token.strength}`}
+                  onClick={() => sendAction({ action: 'dragon_return_token', token_id: token.id })}
+                  className="w-20 h-20 rounded-full bg-[#34D399]/10 border-2 border-[#34D399]/30 hover:border-[#34D399] hover:bg-[#34D399]/20 transition-all flex flex-col items-center justify-center">
+                  <span className="text-[#34D399] font-bold text-lg uppercase">{token.type?.charAt(0)}{token.strength}</span>
+                  <span className="text-[9px] text-[#A1A1AA] capitalize">{token.type}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Notifications */}
       <div className="fixed top-16 right-4 z-50 space-y-2 max-w-xs">
@@ -341,43 +423,22 @@ function GameContent() {
   );
 }
 
-
 function ObjectiveSelect({ gameState, myPlayer, sendAction, isSpectator }) {
   const [objectives, setObjectives] = useState([]);
-
   useEffect(() => {
     fetch(`${process.env.REACT_APP_BACKEND_URL}/api/game-data/objectives`)
-      .then(r => r.json()).then(data => setObjectives(data)).catch(() => {});
+      .then(r => r.json()).then(setObjectives).catch(() => {});
   }, []);
-
-  if (isSpectator) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0A0A0A]">
-        <p className="text-[#A1A1AA] font-heading text-xl">Players are selecting secret objectives...</p>
-      </div>
-    );
-  }
-
-  if (myPlayer?.secret_objective) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0A0A0A]">
-        <div className="glass-panel rounded-sm p-8 text-center">
-          <p className="text-[#D4AF37] font-heading text-xl mb-2">Objective Selected</p>
-          <p className="text-[#A1A1AA]">Waiting for other players...</p>
-        </div>
-      </div>
-    );
-  }
-
+  if (isSpectator) return <div className="min-h-screen flex items-center justify-center bg-[#0A0A0A]"><p className="text-[#A1A1AA] font-heading text-xl">Players selecting objectives...</p></div>;
+  if (myPlayer?.secret_objective) return <div className="min-h-screen flex items-center justify-center bg-[#0A0A0A]"><div className="glass-panel rounded-sm p-8 text-center"><p className="text-[#D4AF37] font-heading text-xl mb-2">Objective Selected</p><p className="text-[#A1A1AA]">Waiting for others...</p></div></div>;
   const options = myPlayer?.secret_objective_options || [];
-  const availableObjectives = objectives.filter(o => options.includes(o.id));
-
+  const avail = objectives.filter(o => options.includes(o.id));
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#0A0A0A] p-6" data-testid="objective-select">
       <div className="max-w-2xl w-full">
         <h2 className="font-heading text-3xl font-bold text-[#D4AF37] text-center mb-8">Choose Your Secret Objective</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {availableObjectives.map(obj => (
+          {avail.map(obj => (
             <button key={obj.id} data-testid={`objective-${obj.id}`}
               onClick={() => sendAction({ action: 'select_objective', objective: obj.id })}
               className="glass-panel rounded-sm p-6 text-left hover:border-[#D4AF37]/50 transition-all hover:-translate-y-1">
@@ -392,28 +453,33 @@ function ObjectiveSelect({ gameState, myPlayer, sendAction, isSpectator }) {
   );
 }
 
+// Border lookup helpers
+const BORDERS_RAW = [
+  {id:"1",p:["shadowland_bottom","shadowland_top"]},{id:"2",p:["shadowland_top","crab_1"]},{id:"3",p:["shadowland_top","crab_2"]},{id:"4",p:["shadowland_top","crab_3"]},{id:"5",p:["shadowland_bottom","crab_3"]},{id:"6",p:["crab_3","crab_2"]},{id:"7",p:["crab_3","wind_1"]},{id:"8",p:["crab_2","wind_1"]},{id:"9",p:["wind_2","wind_1"]},{id:"10",p:["wind_1","wind_3"]},{id:"11",p:["wind_2","wind_3"]},{id:"12",p:["crab_2","wind_2"]},{id:"13",p:["crab_4","wind_2"]},{id:"14",p:["crab_2","crab_4"]},{id:"15",p:["crab_1","crab_2"]},{id:"16",p:["crab_1","crab_4"]},{id:"17",p:["crab_1","scorpion_3"]},{id:"18",p:["crab_1","unicorn_1"]},{id:"19",p:["scorpion_3","unicorn_1"]},{id:"20",p:["crab_4","scorpion_3"]},{id:"21",p:["crab_4","scorpion_1"]},{id:"22",p:["crab_4","crane_1"]},{id:"23",p:["scorpion_3","scorpion_1"]},{id:"24",p:["scorpion_3","scorpion_2"]},{id:"25",p:["scorpion_3","unicorn_3"]},{id:"26",p:["unicorn_1","unicorn_3"]},{id:"27",p:["unicorn_1","unicorn_2"]},{id:"28",p:["unicorn_3","unicorn_2"]},{id:"29",p:["unicorn_2","dragon_1"]},{id:"30",p:["scorpion_2","unicorn_3"]},{id:"31",p:["unicorn_3","lion_3"]},{id:"32",p:["lion_3","dragon_1"]},{id:"33",p:["unicorn_2","lion_3"]},{id:"34",p:["dragon_1","dragon_2"]},{id:"35",p:["lion_3","dragon_2"]},{id:"36",p:["dragon_2","phoenix_3"]},{id:"37",p:["phoenix_3","phoenix_2"]},{id:"38",p:["phoenix_2","phoenix_1"]},{id:"39",p:["lion_1","phoenix_2"]},{id:"40",p:["dragon_3","phoenix_3"]},{id:"41",p:["dragon_3","dragon_2"]},{id:"42",p:["dragon_3","lion_1"]},{id:"43",p:["crane_3","lion_1"]},{id:"44",p:["lion_2","lion_1"]},{id:"45",p:["crane_2","crane_3"]},{id:"46",p:["crane_1","crane_2"]},{id:"47",p:["wind_3","crane_1"]},{id:"48",p:["wind_2","crane_1"]},{id:"49",p:["crane_1","scorpion_1"]},{id:"50",p:["scorpion_1","crane_2"]},{id:"51",p:["scorpion_1","scorpion_2"]},{id:"52",p:["scorpion_1","lion_2"]},{id:"53",p:["scorpion_2","lion_2"]},{id:"54",p:["scorpion_2","lion_3"]},{id:"55",p:["lion_2","lion_3"]},{id:"56",p:["lion_3","dragon_3"]},{id:"57",p:["lion_2","dragon_3"]},{id:"58",p:["island_1","island_2"]},{id:"59",p:["island_1","island_3"]},{id:"60",p:["island_2","island_3"]},{id:"61",p:["lion_2","crane_3"]},{id:"62",p:["crane_2","lion_2"]},{id:"63",p:["lion_1","phoenix_3"]},{id:"64",p:["lion_1","phoenix_1"]}
+];
+const SEA_BORDERS = [
+  {id:"65",p:["sea","island_1"]},{id:"66",p:["island_3","sea"]},{id:"67",p:["island_2","sea"]},
+  {id:"68",p:["sea","shadowland_bottom"]},{id:"69",p:["sea","crab_3"]},{id:"70",p:["wind_1","sea"]},
+  {id:"71",p:["wind_3","sea"]},{id:"72",p:["crane_1","sea"]},{id:"73",p:["crane_2","sea"]},
+  {id:"74",p:["crane_3","sea"]},{id:"75",p:["lion_1","sea"]},{id:"76",p:["phoenix_1","sea"]}
+];
+
 function findBorder(p1, p2) {
-  if (!window.__borderLookup) {
-    const BORDERS_RAW = [
-      {id:"1",p:["shadowland_bottom","shadowland_top"]},{id:"2",p:["shadowland_top","crab_1"]},{id:"3",p:["shadowland_top","crab_2"]},{id:"4",p:["shadowland_top","crab_3"]},{id:"5",p:["shadowland_bottom","crab_3"]},{id:"6",p:["crab_3","crab_2"]},{id:"7",p:["crab_3","wind_1"]},{id:"8",p:["crab_2","wind_1"]},{id:"9",p:["wind_2","wind_1"]},{id:"10",p:["wind_1","wind_3"]},{id:"11",p:["wind_2","wind_3"]},{id:"12",p:["crab_2","wind_2"]},{id:"13",p:["crab_4","wind_2"]},{id:"14",p:["crab_2","crab_4"]},{id:"15",p:["crab_1","crab_2"]},{id:"16",p:["crab_1","crab_4"]},{id:"17",p:["crab_1","scorpion_3"]},{id:"18",p:["crab_1","unicorn_1"]},{id:"19",p:["scorpion_3","unicorn_1"]},{id:"20",p:["crab_4","scorpion_3"]},{id:"21",p:["crab_4","scorpion_1"]},{id:"22",p:["crab_4","crane_1"]},{id:"23",p:["scorpion_3","scorpion_1"]},{id:"24",p:["scorpion_3","scorpion_2"]},{id:"25",p:["scorpion_3","unicorn_3"]},{id:"26",p:["unicorn_1","unicorn_3"]},{id:"27",p:["unicorn_1","unicorn_2"]},{id:"28",p:["unicorn_3","unicorn_2"]},{id:"29",p:["unicorn_2","dragon_1"]},{id:"30",p:["scorpion_2","unicorn_3"]},{id:"31",p:["unicorn_3","lion_3"]},{id:"32",p:["lion_3","dragon_1"]},{id:"33",p:["unicorn_2","lion_3"]},{id:"34",p:["dragon_1","dragon_2"]},{id:"35",p:["lion_3","dragon_2"]},{id:"36",p:["dragon_2","phoenix_3"]},{id:"37",p:["phoenix_3","phoenix_2"]},{id:"38",p:["phoenix_2","phoenix_1"]},{id:"39",p:["lion_1","phoenix_2"]},{id:"40",p:["dragon_3","phoenix_3"]},{id:"41",p:["dragon_3","dragon_2"]},{id:"42",p:["dragon_3","lion_1"]},{id:"43",p:["crane_3","lion_1"]},{id:"44",p:["lion_2","lion_1"]},{id:"45",p:["crane_2","crane_3"]},{id:"46",p:["crane_1","crane_2"]},{id:"47",p:["wind_3","crane_1"]},{id:"48",p:["wind_2","crane_1"]},{id:"49",p:["crane_1","scorpion_1"]},{id:"50",p:["scorpion_1","crane_2"]},{id:"51",p:["scorpion_1","scorpion_2"]},{id:"52",p:["scorpion_1","lion_2"]},{id:"53",p:["scorpion_2","lion_2"]},{id:"54",p:["scorpion_2","lion_3"]},{id:"55",p:["lion_2","lion_3"]},{id:"56",p:["lion_3","dragon_3"]},{id:"57",p:["lion_2","dragon_3"]},{id:"58",p:["island_1","island_2"]},{id:"59",p:["island_1","island_3"]},{id:"60",p:["island_2","island_3"]},{id:"61",p:["lion_2","crane_3"]},{id:"62",p:["crane_2","lion_2"]},{id:"63",p:["lion_1","phoenix_3"]},{id:"64",p:["lion_1","phoenix_1"]}
-    ];
-    const lookup = {};
-    BORDERS_RAW.forEach(b => {
-      const key = [b.p[0], b.p[1]].sort().join('|');
-      lookup[key] = b.id;
-    });
-    window.__borderLookup = lookup;
+  for (const b of BORDERS_RAW) {
+    if ((b.p[0] === p1 && b.p[1] === p2) || (b.p[0] === p2 && b.p[1] === p1)) return b.id;
   }
-  const key = [p1, p2].sort().join('|');
-  return window.__borderLookup[key] || null;
+  return null;
 }
 
+function findSeaBorder(coastalProvince) {
+  for (const b of SEA_BORDERS) {
+    if (b.p.includes(coastalProvince) && b.p.includes('sea')) return b.id;
+  }
+  return null;
+}
 
 export default function GamePage() {
-  const { token } = useAuth();
   const { gameId } = useParams();
-  const [searchParams] = useSearchParams();
-
   return (
     <GameProvider gameId={gameId}>
       <GameContent />
