@@ -12,13 +12,22 @@ import { Volume2, VolumeX, X, Wifi, WifiOff } from 'lucide-react';
 import { CLANS } from '../constants/gameConstants';
 import { preloadGameAssets } from '../lib/assetPreload';
 
+const SFX_PATHS = {
+  controlPlacement: '/assets/control_token_placement.mp3',
+  combatPlacement: '/assets/combat_token_placement.mp3',
+  unicornSwitch: '/assets/unicorn_switch.mp3',
+  scout: '/assets/scout.mp3',
+  spy: '/assets/spy.mp3',
+  shugenja: '/assets/shugenja.mp3',
+};
+
 // Big announcement modal for game events
 function AnnouncementModal({ announcement, onClose }) {
   if (!announcement) return null;
   return (
     <div className="fixed inset-0 z-[95] flex items-center justify-center" data-testid="announcement-modal">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative z-10 max-w-lg w-full mx-4 animate-scale-in">
+      <div className="relative z-10 max-w-xl w-full mx-4 animate-modal-in">
         <div className="glass-panel rounded-sm p-8 text-center">
           {announcement.image && (
             <img src={announcement.image} alt="" className="w-32 h-32 object-contain mx-auto mb-4 drop-shadow-[0_0_20px_rgba(212,175,55,0.3)]"
@@ -53,7 +62,7 @@ function ObjectiveDetailModal({ objectiveId, onClose }) {
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center" onClick={onClose} data-testid="objective-detail-modal">
       <div className="absolute inset-0 bg-black/60" />
-      <div className="relative z-10 glass-panel rounded-sm p-6 max-w-md w-full mx-4 animate-scale-in" onClick={e => e.stopPropagation()}>
+        <div className="relative z-10 glass-panel rounded-sm p-6 max-w-md w-full mx-4 animate-modal-in" onClick={e => e.stopPropagation()}>
         <h3 className="font-heading text-xl font-bold text-[#D4AF37] mb-3">Secret Objective</h3>
         {obj ? (
           <>
@@ -77,7 +86,7 @@ function CombatTokenInfoModal({ selection, players, onClose }) {
   return (
     <div className="fixed inset-0 z-[98] flex items-center justify-center" onClick={onClose} data-testid="combat-token-info-modal">
       <div className="absolute inset-0 bg-black/60" />
-      <div className="relative z-10 glass-panel rounded-sm p-5 max-w-sm w-full mx-4" onClick={(e) => e.stopPropagation()}>
+      <div className="relative z-10 glass-panel rounded-sm p-5 max-w-sm w-full mx-4 animate-modal-in" onClick={(e) => e.stopPropagation()}>
         <h3 className="font-heading text-xl font-bold text-[#D4AF37] mb-3">Combat Token</h3>
         <div className="space-y-1 text-sm">
           <div className="text-[#F5F5F0] capitalize"><span className="text-[#A1A1AA]">Type:</span> {token.type}</div>
@@ -98,6 +107,11 @@ function GameContent() {
   const [sourceProvince, setSourceProvince] = useState(null);
   const [musicPlaying, setMusicPlaying] = useState(false);
   const audioRef = useRef(null);
+  const sfxRef = useRef({});
+  const prevStateRef = useRef(null);
+  const gameStateRef = useRef(null);
+  const [musicVolume, setMusicVolume] = useState(0.45);
+  const [showVolumeControl, setShowVolumeControl] = useState(false);
   const [abilityMode, setAbilityMode] = useState(null);
   const [abilityModal, setAbilityModal] = useState({ open: false, type: null, result: null });
   const [selectedProvinceInfo, setSelectedProvinceInfo] = useState(null);
@@ -108,6 +122,9 @@ function GameContent() {
   const [blessingMode, setBlessingMode] = useState(null); // token to place as blessing
   const [unicornSwitchMode, setUnicornSwitchMode] = useState(false);
   const [unicornSelectedTokens, setUnicornSelectedTokens] = useState([]);
+  const [tokenAnimationByKey, setTokenAnimationByKey] = useState({});
+  const [highlightedTokenKey, setHighlightedTokenKey] = useState(null);
+  const [highlightTone, setHighlightTone] = useState('blue');
 
   const toggleMusic = () => {
     if (audioRef.current) {
@@ -117,11 +134,40 @@ function GameContent() {
     }
   };
 
+  const playSfx = (name) => {
+    const player = sfxRef.current[name];
+    if (!player) return;
+    try {
+      player.currentTime = 0;
+      player.play().catch(() => {});
+    } catch (_) {}
+  };
+
+  useEffect(() => {
+    audioRef.current && (audioRef.current.volume = musicVolume);
+  }, [musicVolume]);
+
+  useEffect(() => {
+    const players = {};
+    Object.entries(SFX_PATHS).forEach(([k, src]) => {
+      const a = new Audio(src);
+      a.preload = 'auto';
+      a.volume = 0.8;
+      players[k] = a;
+    });
+    sfxRef.current = players;
+  }, []);
+
+  useEffect(() => {
+    gameStateRef.current = gameState;
+  }, [gameState]);
+
   // Handle shugenja results (broadcast to all)
   useEffect(() => {
     if (gameState?.shugenja_result) {
       const r = gameState.shugenja_result;
       const actorClan = gameState.players[r.actor]?.clan;
+      playSfx('shugenja');
       setAnnouncement({
         title: 'Shugenja Invoked!',
         message: `${CLANS[actorClan]?.name || 'Unknown'} used Shugenja`,
@@ -141,6 +187,24 @@ function GameContent() {
     if (msg.startsWith('Scout used|')) {
       try {
         const tokenData = JSON.parse(msg.split('|')[1]);
+        playSfx('scout');
+        if (tokenData.location === 'border' && tokenData.border_id) {
+          const bt = gameStateRef.current?.borders?.[tokenData.border_id]?.combat_token;
+          if (bt?.id) {
+            setHighlightTone('blue');
+            setHighlightedTokenKey(`border:${tokenData.border_id}:${bt.id}`);
+            setTimeout(() => setHighlightedTokenKey(null), 2500);
+          }
+        }
+        if (tokenData.location === 'province' && tokenData.province_id) {
+          const provTokens = gameStateRef.current?.provinces?.[tokenData.province_id]?.combat_tokens || [];
+          const target = provTokens.find(t => t.player_index === tokenData.player_index && t.type === tokenData.type && t.strength === tokenData.strength);
+          if (target?.id) {
+            setHighlightTone('blue');
+            setHighlightedTokenKey(`province:${tokenData.province_id}:${target.id}`);
+            setTimeout(() => setHighlightedTokenKey(null), 2500);
+          }
+        }
         setAnnouncement({
           title: 'Scout Deployed',
           message: 'You peeked at a hidden token',
@@ -153,6 +217,7 @@ function GameContent() {
     } else if (msg.startsWith('Scorpion spy|')) {
       try {
         const tokenData = JSON.parse(msg.split('|')[1]);
+        playSfx('spy');
         setAnnouncement({
           title: 'Scorpion Spy',
           message: 'The shadows reveal their secrets...',
@@ -189,6 +254,76 @@ function GameContent() {
             setUnicornSelectedTokens([]);
         }
     }, [isUnicornSwitchTurn]);
+
+    useEffect(() => {
+      if (!gameState) return;
+      const prev = prevStateRef.current;
+      if (prev) {
+        const nextAnimations = {};
+        let playControlPlacement = false;
+        let playCombatPlacement = false;
+        let playUnicorn = false;
+
+        Object.keys(gameState.provinces || {}).forEach((provinceId) => {
+          const prevProv = prev.provinces?.[provinceId];
+          const nextProv = gameState.provinces?.[provinceId];
+          const prevControlCount = prevProv?.control_tokens?.length || 0;
+          const nextControlCount = nextProv?.control_tokens?.length || 0;
+          if (nextControlCount > prevControlCount && gameState.status === 'setup' && gameState.phase === 'setup') {
+            nextAnimations[`control:${provinceId}`] = 'animate-token-zoom-out';
+            playControlPlacement = true;
+          }
+
+          const prevCombatIds = new Set((prevProv?.combat_tokens || []).map(t => t.id));
+          (nextProv?.combat_tokens || []).forEach((t) => {
+            if (!prevCombatIds.has(t.id) && gameState.phase === 'placement') {
+              nextAnimations[`province:${provinceId}:${t.id}`] = 'animate-token-fly-in';
+              playCombatPlacement = true;
+            }
+          });
+        });
+
+        Object.keys(gameState.borders || {}).forEach((borderId) => {
+          const prevToken = prev.borders?.[borderId]?.combat_token;
+          const nextToken = gameState.borders?.[borderId]?.combat_token;
+          if (!prevToken && nextToken && gameState.phase === 'placement') {
+            nextAnimations[`border:${borderId}:${nextToken.id}`] = 'animate-token-fly-in';
+            playCombatPlacement = true;
+          }
+        });
+
+        const prevLoc = {};
+        const nextLoc = {};
+        Object.entries(prev.provinces || {}).forEach(([pid, prov]) => {
+          (prov.combat_tokens || []).forEach((t) => { prevLoc[t.id] = `province:${pid}:${t.id}`; });
+        });
+        Object.entries(prev.borders || {}).forEach(([bid, b]) => {
+          if (b.combat_token) prevLoc[b.combat_token.id] = `border:${bid}:${b.combat_token.id}`;
+        });
+        Object.entries(gameState.provinces || {}).forEach(([pid, prov]) => {
+          (prov.combat_tokens || []).forEach((t) => { nextLoc[t.id] = `province:${pid}:${t.id}`; });
+        });
+        Object.entries(gameState.borders || {}).forEach(([bid, b]) => {
+          if (b.combat_token) nextLoc[b.combat_token.id] = `border:${bid}:${b.combat_token.id}`;
+        });
+
+        Object.keys(nextLoc).forEach((tokenId) => {
+          if (prevLoc[tokenId] && prevLoc[tokenId] !== nextLoc[tokenId]) {
+            nextAnimations[nextLoc[tokenId]] = 'animate-token-fly-in';
+            playUnicorn = true;
+          }
+        });
+
+        if (Object.keys(nextAnimations).length > 0) {
+          setTokenAnimationByKey(nextAnimations);
+          setTimeout(() => setTokenAnimationByKey({}), 1200);
+        }
+        if (playControlPlacement) playSfx('controlPlacement');
+        if (playCombatPlacement) playSfx('combatPlacement');
+        if (playUnicorn) playSfx('unicornSwitch');
+      }
+      prevStateRef.current = gameState;
+    }, [gameState]);
 
     if (!gameState) {
         return (
@@ -391,9 +526,30 @@ function GameContent() {
             </div>
           )}
           {connected ? <Wifi className="w-4 h-4 text-[#2E7D32]" /> : <WifiOff className="w-4 h-4 text-[#D32F2F]" />}
-          <button onClick={toggleMusic} className="p-1 hover:bg-white/10 rounded" data-testid="music-toggle">
-            {musicPlaying ? <Volume2 className="w-4 h-4 text-[#D4AF37]" /> : <VolumeX className="w-4 h-4 text-[#A1A1AA]" />}
-          </button>
+          <div
+            className="relative"
+            onMouseEnter={() => setShowVolumeControl(true)}
+            onMouseLeave={() => setShowVolumeControl(false)}
+          >
+            <button onClick={toggleMusic} className="p-1 hover:bg-white/10 rounded" data-testid="music-toggle">
+              {musicPlaying ? <Volume2 className="w-4 h-4 text-[#D4AF37]" /> : <VolumeX className="w-4 h-4 text-[#A1A1AA]" />}
+            </button>
+            {showVolumeControl && (
+              <div className="absolute right-0 top-8 glass-panel rounded-sm p-2 w-36 z-20 animate-modal-in">
+                <div className="text-[10px] text-[#A1A1AA] uppercase tracking-wider font-bold mb-1">Music Volume</div>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={musicVolume}
+                  onChange={(e) => setMusicVolume(Number(e.target.value))}
+                  className="w-full accent-[#D4AF37]"
+                  data-testid="music-volume-slider"
+                />
+              </div>
+            )}
+          </div>
           {isSpectator && <span className="text-xs px-2 py-0.5 bg-[#F57C00]/20 text-[#F57C00] rounded-sm font-bold uppercase">Spectator</span>}
         </div>
       </div>
@@ -433,6 +589,9 @@ function GameContent() {
             onCombatTokenClick={handleCombatTokenClick}
             unicornSwitchMode={unicornSwitchMode && isUnicornSwitchTurn}
             unicornSelectedTokens={unicornSelectedTokens}
+            tokenAnimationByKey={tokenAnimationByKey}
+            highlightedTokenKey={highlightedTokenKey}
+            highlightTone={highlightTone}
           />
           {myPlayer && !isSpectator && (
             <div className="h-28 bg-[#161618] border-t border-white/5 px-4 py-2 flex items-center gap-3 shrink-0">
@@ -473,7 +632,7 @@ function GameContent() {
       {myPlayer?.dragon_must_return && myPlayer?.hand && (
         <div className="fixed inset-0 z-[96] flex items-center justify-center" data-testid="dragon-return-modal">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-          <div className="relative z-10 glass-panel rounded-sm p-6 max-w-lg w-full mx-4 animate-scale-in">
+          <div className="relative z-10 glass-panel rounded-sm p-6 max-w-lg w-full mx-4 animate-modal-in">
             <h3 className="font-heading text-xl font-bold text-[#34D399] mb-2">Dragon Ability</h3>
             <p className="text-sm text-[#A1A1AA] mb-4">You drew an extra token. Select one non-bluff token to return to your pool.</p>
             <div className="flex flex-wrap gap-3 justify-center">

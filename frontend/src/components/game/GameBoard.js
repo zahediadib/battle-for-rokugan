@@ -103,6 +103,8 @@ export default function GameBoard({
   gameState, myPlayerIndex, selectedToken, sourceProvince, placementStep,
   onProvinceClick, onBorderClick, onSeaClick, abilityMode, blessingMode,
   onCombatTokenClick, unicornSwitchMode, unicornSelectedTokens = [],
+  tokenAnimationByKey = {}, tokenMovementByKey = {}, highlightedTokenKey = null,
+  highlightTone = 'blue', shugenjaBlastKey = null,
 }) {
   const containerRef = useRef(null);
   const [scale, setScale] = useState(1);
@@ -147,6 +149,21 @@ export default function GameBoard({
     () => new Set(unicornSelectedTokens.map(t => `${t.location.type}:${t.location.id}:${t.token.id}`)),
     [unicornSelectedTokens]
   );
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    Object.entries(tokenMovementByKey || {}).forEach(([key, delta]) => {
+      if (!delta) return;
+      const el = containerRef.current.querySelector(`[data-token-key="${key}"]`);
+      if (!el) return;
+      try {
+        el.animate(
+          [{ transform: `translate(${delta.x}px, ${delta.y}px)` }, { transform: 'translate(0px, 0px)' }],
+          { duration: 520, easing: 'cubic-bezier(.16,.84,.44,1)', fill: 'both' }
+        );
+      } catch (_) {}
+    });
+  }, [tokenMovementByKey]);
 
   return (
     <div ref={containerRef} className="flex-1 overflow-auto flex items-center justify-center bg-[#0A0A0A] relative" data-testid="game-board">
@@ -195,7 +212,7 @@ export default function GameBoard({
                     left: s(prov.center.x + Math.cos(angle) * r) - controlSize / 2,
                     top: s(prov.center.y + Math.sin(angle) * r) - controlSize / 2,
                     zIndex: 5, pointerEvents: 'none',
-                  }}>
+                  }} className={tokenAnimationByKey[`control:${prov.id}`] || tokenAnimationByKey[`control:${prov.id}:${idx}`] || ''}>
                     <ControlToken ct={ct} players={gameState.players} size={controlSize} />
                   </div>
                 );
@@ -213,6 +230,9 @@ export default function GameBoard({
                 const isClickableForInfo = isOwnToken && !isClickableForBlessing;
                 const selectedKey = `province:${prov.id}:${ct.id}`;
                 const isSelectedForUnicorn = selectedTokenKeys.has(selectedKey);
+                const isHighlighted = highlightedTokenKey === selectedKey;
+                const isBlast = shugenjaBlastKey === selectedKey;
+                const animClass = tokenAnimationByKey[selectedKey] || '';
                 return (
                   <div key={`combat-${prov.id}-${idx}`} style={{
                     position: 'absolute',
@@ -224,7 +244,8 @@ export default function GameBoard({
                   }} onClick={() => {
                     if (isClickableForBlessing) onProvinceClick(prov.id);
                     else if (isClickableForInfo && onCombatTokenClick) onCombatTokenClick({ token: ct, location: { type: 'province', id: prov.id } });
-                  }}>
+                  }} data-token-key={selectedKey}
+                    className={`${animClass} ${isBlast ? 'animate-shugenja-blast' : ''}`}>
                     <CombatToken token={ct} color={playerColor} faceUp={ct.face_up} size={tokenSize} />
                     {isClickableForBlessing && (
                       <div style={{
@@ -238,6 +259,9 @@ export default function GameBoard({
                         border: '2px solid #A78BFA', boxShadow: '0 0 10px rgba(167,139,250,0.75)',
                       }} />
                     )}
+                    {isHighlighted && (
+                      <div className={highlightTone === 'red' ? 'token-highlight-red' : 'token-highlight-blue'} style={{ position: 'absolute', inset: -4 }} />
+                    )}
                   </div>
                 );
               })}
@@ -248,7 +272,7 @@ export default function GameBoard({
                   position: 'absolute', left: s(prov.center.x) - s(22), top: s(prov.center.y) - s(65),
                   zIndex: 20, pointerEvents: 'none',
                 }}>
-                  <SpecialToken type={provState.special_token} size={Math.max(s(44), 18)} />
+                  <SpecialToken type={provState.special_token} size={Math.max(s(88), 36)} />
                 </div>
               )}
             </React.Fragment>
@@ -268,7 +292,7 @@ export default function GameBoard({
 
           // Direction pointer: based on isUpDown and which province the attacker controls
           let pointerDir = null; // 'top' | 'bottom' | 'left' | 'right'
-          const showPointer = hasCombat && (gameState.phase === 'placement' || hasCombat.face_up);
+          const showPointer = !!hasCombat;
           if (showPointer) {
             const p1id = border.provinces[0];
             const p2id = border.provinces[1];
@@ -280,6 +304,12 @@ export default function GameBoard({
               pointerDir = p1Controlled ? 'right' : 'left'; // Attacking from p1 (left) to p2 (right)
             }
           }
+          const ownerClan = hasCombat?.player_index !== undefined ? gameState.players?.[hasCombat.player_index]?.clan : null;
+          const pointerColor = ownerClan ? (CLANS[ownerClan]?.color || '#D4AF37') : '#D4AF37';
+          const borderTokenKey = hasCombat ? `border:${border.id}:${hasCombat.id}` : null;
+          const isHighlightedBorder = highlightedTokenKey === borderTokenKey;
+          const isBlastBorder = shugenjaBlastKey === borderTokenKey;
+          const borderAnimClass = borderTokenKey ? (tokenAnimationByKey[borderTokenKey] || '') : '';
 
           return (
             <React.Fragment key={`border-${border.id}`}>
@@ -313,7 +343,8 @@ export default function GameBoard({
                 }} onClick={() => {
                   if (isAbilityTarget || isBlessingTarget) onBorderClick(border.id);
                   else if (isOwnToken && onCombatTokenClick) onCombatTokenClick({ token: hasCombat, location: { type: 'border', id: border.id } });
-                }}>
+                }} data-token-key={borderTokenKey || undefined}
+                  className={`${borderAnimClass} ${isBlastBorder ? 'animate-shugenja-blast' : ''}`}>
                   <CombatToken
                     token={hasCombat}
                     color={hasCombat.player_index !== undefined && gameState.players[hasCombat.player_index] ? gameState.players[hasCombat.player_index].color : 'Gray'}
@@ -323,15 +354,15 @@ export default function GameBoard({
                   {pointerDir && (
                     <div style={{
                       position: 'absolute',
-                      ...(pointerDir === 'top' ? { top: -pointerSize - 2, left: '50%', transform: 'translateX(-50%)' } :
-                         pointerDir === 'bottom' ? { bottom: -pointerSize - 2, left: '50%', transform: 'translateX(-50%) rotate(180deg)' } :
-                         pointerDir === 'left' ? { left: -pointerSize - 2, top: '50%', transform: 'translateY(-50%) rotate(-90deg)' } :
-                         { right: -pointerSize - 2, top: '50%', transform: 'translateY(-50%) rotate(90deg)' }),
+                      ...(pointerDir === 'top' ? { top: -Math.max(pointerSize * 0.45, 4), left: '50%', transform: 'translateX(-50%)' } :
+                         pointerDir === 'bottom' ? { bottom: -Math.max(pointerSize * 0.45, 4), left: '50%', transform: 'translateX(-50%) rotate(180deg)' } :
+                         pointerDir === 'left' ? { left: -Math.max(pointerSize * 0.45, 4), top: '50%', transform: 'translateY(-50%) rotate(-90deg)' } :
+                         { right: -Math.max(pointerSize * 0.45, 4), top: '50%', transform: 'translateY(-50%) rotate(90deg)' }),
                       width: 0, height: 0,
                       borderLeft: `${pointerSize * 0.5}px solid transparent`,
                       borderRight: `${pointerSize * 0.5}px solid transparent`,
-                      borderBottom: `${pointerSize}px solid #D4AF37`,
-                      filter: 'drop-shadow(0 0 4px rgba(212,175,55,0.6))',
+                      borderBottom: `${pointerSize}px solid ${pointerColor}`,
+                      filter: 'drop-shadow(0 0 4px rgba(0,0,0,0.6))',
                     }} />
                   )}
                   {isBlessingTarget && (
@@ -339,6 +370,9 @@ export default function GameBoard({
                   )}
                   {unicornSwitchMode && isSelectedForUnicorn && (
                     <div style={{ position: 'absolute', inset: -3, borderRadius: '50%', border: '2px solid #A78BFA', boxShadow: '0 0 10px rgba(167,139,250,0.75)' }} />
+                  )}
+                  {isHighlightedBorder && (
+                    <div className={highlightTone === 'red' ? 'token-highlight-red' : 'token-highlight-blue'} style={{ position: 'absolute', inset: -4 }} />
                   )}
                 </div>
               )}
