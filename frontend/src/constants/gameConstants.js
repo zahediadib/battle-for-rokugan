@@ -54,6 +54,7 @@ export const TOKEN_ABBREVIATIONS = {
 export const TERRITORY_LABELS = {
   shadowland_bottom: 'Shadowlands (South)',
   shadowland_top: 'Shadowlands (North)',
+  shadowland: 'Shadowlands',
   crab: 'Crab Lands',
   wind: 'Wind Lands',
   crane: 'Crane Lands',

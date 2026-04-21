@@ -106,7 +106,7 @@ function GameContent() {
         image: '/assets/shugenja.png',
       });
     }
-  }, [gameState?.shugenja_result]);
+  }, [gameState?.shugenja_result, gameState?.players]);
 
   // Listen for scout/scorpion results + territory card plays in notifications
   useEffect(() => {
