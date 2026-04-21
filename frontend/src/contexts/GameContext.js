@@ -47,6 +47,7 @@ export function GameProvider({ gameId, children }) {
         } else if (msg.type === 'notification') {
           pushNotification(msg.message);
         } else if (msg.type === 'action_result' && msg.success) {
+          // These success payloads include structured hidden-info/event data that GamePage converts into centered announcement modals.
           if (
             msg.message?.startsWith('Scout used|') ||
             msg.message?.startsWith('Scorpion spy|') ||

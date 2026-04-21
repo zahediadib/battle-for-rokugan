@@ -1322,8 +1322,8 @@ def process_unicorn_ability(game, player_idx, action):
 
     if not loc1 or not loc2 or not token1_id or not token2_id:
         return False, "You must select two of your tokens", game
-    if loc1.get("type") == loc2.get("type") and loc1.get("id") == loc2.get("id") and token1_id == token2_id:
-        return False, "Choose two different tokens", game
+    if loc1.get("type") == loc2.get("type") and loc1.get("id") == loc2.get("id"):
+        return False, "Choose tokens from two different locations", game
 
     token1 = _extract_unicorn_token(game, player_idx, loc1, token1_id)
     token2 = _extract_unicorn_token(game, player_idx, loc2, token2_id)
