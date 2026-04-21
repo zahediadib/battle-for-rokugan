@@ -283,7 +283,7 @@ def process_place_control_token(game, player_idx, action):
     province = game["provinces"][province_id]
     # Setup rule: token can only be placed in an empty province.
     if province["control_tokens"]:
-        return False, "Province already has a control token", game
+        return False, "Province is not empty", game
 
     # Place control token
     province["control_tokens"].append({
