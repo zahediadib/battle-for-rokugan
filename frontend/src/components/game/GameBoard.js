@@ -241,7 +241,7 @@ export default function GameBoard({ gameState, myPlayerIndex, selectedToken, sou
 
           // Direction pointer: based on isUpDown and which province the attacker controls
           let pointerDir = null; // 'top' | 'bottom' | 'left' | 'right'
-          if (hasCombat && hasCombat.face_up && hasCombat.type !== 'hidden') {
+          if (hasCombat && (gameState.phase === 'placement' || hasCombat.face_up)) {
             const p1id = border.provinces[0];
             const p2id = border.provinces[1];
             const p1Controlled = gameState.provinces?.[p1id]?.controlled_by === hasCombat.player_index;

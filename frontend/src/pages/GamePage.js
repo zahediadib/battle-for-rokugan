@@ -10,6 +10,7 @@ import { AbilityModal, AbilityButtons } from '../components/game/AbilityModal';
 import ProvinceInfoPopup from '../components/game/ProvinceInfoPopup';
 import { Volume2, VolumeX, X, Wifi, WifiOff } from 'lucide-react';
 import { CLANS } from '../constants/gameConstants';
+import { preloadGameAssets } from '../lib/assetPreload';
 
 // Big announcement modal for game events
 function AnnouncementModal({ announcement, onClose }) {
@@ -363,9 +364,9 @@ function GameContent() {
                 onTokenSelect={handleTokenSelect} onCancelSelection={cancelSelection}
                 onObjectiveClick={() => setObjectiveDetail(myPlayer.secret_objective)} />
               <AbilityButtons player={myPlayer} gameState={gameState} myPlayerIndex={myPlayerIndex}
-                onUseScout={() => { setAbilityMode('scout'); cancelSelection(); }}
-                onUseShugenja={() => { setAbilityMode('shugenja'); cancelSelection(); }}
-                onUseScorpionAbility={() => { setAbilityMode('scorpion'); cancelSelection(); }} />
+                onUseScout={() => { cancelSelection(); setAbilityMode('scout'); }}
+                onUseShugenja={() => { cancelSelection(); setAbilityMode('shugenja'); }}
+                onUseScorpionAbility={() => { cancelSelection(); setAbilityMode('scorpion'); }} />
             </div>
           )}
         </div>
@@ -453,6 +454,24 @@ function ObjectiveSelect({ gameState, myPlayer, sendAction, isSpectator }) {
   );
 }
 
+function AssetLoadingScreen({ progress }) {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-[#0A0A0A] p-6" data-testid="asset-loading-screen">
+      <div className="glass-panel rounded-sm p-8 w-full max-w-xl">
+        <h2 className="font-heading text-3xl font-bold text-[#D4AF37] mb-4">Preparing Battle Assets</h2>
+        <p className="text-sm text-[#A1A1AA] mb-4">{progress.stage}</p>
+        <div className="w-full h-3 bg-white/10 rounded-sm overflow-hidden mb-2">
+          <div className="h-full bg-[#C41E3A] transition-all duration-300" style={{ width: `${progress.percent}%` }} />
+        </div>
+        <div className="flex items-center justify-between text-xs text-[#A1A1AA]">
+          <span>{progress.percent}%</span>
+          <span>{progress.done}/{progress.total || 0}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Border lookup helpers
 const BORDERS_RAW = [
   {id:"1",p:["shadowland_bottom","shadowland_top"]},{id:"2",p:["shadowland_top","crab_1"]},{id:"3",p:["shadowland_top","crab_2"]},{id:"4",p:["shadowland_top","crab_3"]},{id:"5",p:["shadowland_bottom","crab_3"]},{id:"6",p:["crab_3","crab_2"]},{id:"7",p:["crab_3","wind_1"]},{id:"8",p:["crab_2","wind_1"]},{id:"9",p:["wind_2","wind_1"]},{id:"10",p:["wind_1","wind_3"]},{id:"11",p:["wind_2","wind_3"]},{id:"12",p:["crab_2","wind_2"]},{id:"13",p:["crab_4","wind_2"]},{id:"14",p:["crab_2","crab_4"]},{id:"15",p:["crab_1","crab_2"]},{id:"16",p:["crab_1","crab_4"]},{id:"17",p:["crab_1","scorpion_3"]},{id:"18",p:["crab_1","unicorn_1"]},{id:"19",p:["scorpion_3","unicorn_1"]},{id:"20",p:["crab_4","scorpion_3"]},{id:"21",p:["crab_4","scorpion_1"]},{id:"22",p:["crab_4","crane_1"]},{id:"23",p:["scorpion_3","scorpion_1"]},{id:"24",p:["scorpion_3","scorpion_2"]},{id:"25",p:["scorpion_3","unicorn_3"]},{id:"26",p:["unicorn_1","unicorn_3"]},{id:"27",p:["unicorn_1","unicorn_2"]},{id:"28",p:["unicorn_3","unicorn_2"]},{id:"29",p:["unicorn_2","dragon_1"]},{id:"30",p:["scorpion_2","unicorn_3"]},{id:"31",p:["unicorn_3","lion_3"]},{id:"32",p:["lion_3","dragon_1"]},{id:"33",p:["unicorn_2","lion_3"]},{id:"34",p:["dragon_1","dragon_2"]},{id:"35",p:["lion_3","dragon_2"]},{id:"36",p:["dragon_2","phoenix_3"]},{id:"37",p:["phoenix_3","phoenix_2"]},{id:"38",p:["phoenix_2","phoenix_1"]},{id:"39",p:["lion_1","phoenix_2"]},{id:"40",p:["dragon_3","phoenix_3"]},{id:"41",p:["dragon_3","dragon_2"]},{id:"42",p:["dragon_3","lion_1"]},{id:"43",p:["crane_3","lion_1"]},{id:"44",p:["lion_2","lion_1"]},{id:"45",p:["crane_2","crane_3"]},{id:"46",p:["crane_1","crane_2"]},{id:"47",p:["wind_3","crane_1"]},{id:"48",p:["wind_2","crane_1"]},{id:"49",p:["crane_1","scorpion_1"]},{id:"50",p:["scorpion_1","crane_2"]},{id:"51",p:["scorpion_1","scorpion_2"]},{id:"52",p:["scorpion_1","lion_2"]},{id:"53",p:["scorpion_2","lion_2"]},{id:"54",p:["scorpion_2","lion_3"]},{id:"55",p:["lion_2","lion_3"]},{id:"56",p:["lion_3","dragon_3"]},{id:"57",p:["lion_2","dragon_3"]},{id:"58",p:["island_1","island_2"]},{id:"59",p:["island_1","island_3"]},{id:"60",p:["island_2","island_3"]},{id:"61",p:["lion_2","crane_3"]},{id:"62",p:["crane_2","lion_2"]},{id:"63",p:["lion_1","phoenix_3"]},{id:"64",p:["lion_1","phoenix_1"]}
@@ -480,6 +499,37 @@ function findSeaBorder(coastalProvince) {
 
 export default function GamePage() {
   const { gameId } = useParams();
+
+  const [assetsReady, setAssetsReady] = useState(false);
+  const [assetProgress, setAssetProgress] = useState({
+    stage: 'Loading from Local Storage...',
+    done: 0,
+    total: 0,
+    percent: 0,
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    preloadGameAssets((progress) => {
+      if (isMounted) {
+        setAssetProgress(progress);
+      }
+    })
+      .catch(() => {})
+      .finally(() => {
+        if (isMounted) {
+          setAssetsReady(true);
+        }
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  if (!assetsReady) {
+    return <AssetLoadingScreen progress={assetProgress} />;
+  }
+
   return (
     <GameProvider gameId={gameId}>
       <GameContent />
