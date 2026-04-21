@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 
 const CLAN_HEX = {
-  Gray: '#9CA3AF', Blue: '#60A5FA', Green: '#34D399', Yellow: '#FBBF24',
-  Orange: '#FB923C', Red: '#F87171', Purple: '#A78BFA',
+  Gray: '#7e7c91', Blue: '#4576b8', Green: '#618778', Yellow: '#ccb25b',
+  Orange: '#cd8855', Red: '#a34a39', Purple: '#7b588e',
 };
 
 const TYPE_SYMBOLS = {
@@ -11,7 +11,7 @@ const TYPE_SYMBOLS = {
 };
 
 const SPECIAL_COLORS = {
-  peace: '#60A5FA', scorched_earth: '#F87171', shrine: '#D4AF37',
+  peace: '#3b895c', scorched_earth: '#b8543d', shrine: '#D4AF37',
   battlefield: '#9CA3AF', harbor: '#34D399',
 };
 
@@ -63,7 +63,7 @@ export function CombatToken({ token, color, faceUp, size, style, className }) {
       style={{
         width: size,
         height: size,
-        borderRadius: '50%',
+        borderRadius: `100%`,
         border: `2px solid ${hex}`,
         boxShadow: `0 0 ${Math.max(size * 0.12, 5)}px ${hex}66`,
         ...style,
@@ -109,7 +109,7 @@ export function ControlToken({ ct, players, size, style }) {
       style={{
         width: size,
         height: size,
-        borderRadius: '3px',
+        borderRadius: '100%',
         border: `2px solid ${hex}`,
         boxShadow: `0 0 ${Math.max(size * 0.12, 5)}px ${hex}99`,
         ...style,
@@ -154,7 +154,7 @@ export function SpecialToken({ type, size, style }) {
       style={{
         width: size,
         height: size,
-        borderRadius: '3px',
+        borderRadius: `100%`,
         border: `2px solid ${hex}`,
         boxShadow: `0 0 ${Math.max(size * 0.12, 5)}px ${hex}88`,
         ...style,

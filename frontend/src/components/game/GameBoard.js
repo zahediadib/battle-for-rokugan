@@ -270,9 +270,9 @@ export default function GameBoard({
               {provState?.special_token && (
                 <div style={{
                   position: 'absolute', left: s(prov.center.x) - s(22), top: s(prov.center.y) - s(65),
-                  zIndex: 20, pointerEvents: 'none',
+                  zIndex: 0, pointerEvents: 'none',
                 }}>
-                  <SpecialToken type={provState.special_token} size={Math.max(s(88), 36)} />
+                  <SpecialToken type={provState.special_token} size={Math.max(s(88), 36) * 0.8} />
                 </div>
               )}
             </React.Fragment>
@@ -356,13 +356,13 @@ export default function GameBoard({
                       position: 'absolute',
                       ...(pointerDir === 'top' ? { top: -Math.max(pointerSize * 0.45, 4), left: '50%', transform: 'translateX(-50%)' } :
                          pointerDir === 'bottom' ? { bottom: -Math.max(pointerSize * 0.45, 4), left: '50%', transform: 'translateX(-50%) rotate(180deg)' } :
-                         pointerDir === 'left' ? { left: -Math.max(pointerSize * 0.45, 4), top: '50%', transform: 'translateY(-50%) rotate(-90deg)' } :
-                         { right: -Math.max(pointerSize * 0.45, 4), top: '50%', transform: 'translateY(-50%) rotate(90deg)' }),
+                         pointerDir === 'left' ? { left: -9, top: '50%', transform: 'translateY(-50%) rotate(-90deg)' } :
+                         { right: -9, top: '50%', transform: 'translateY(-50%) rotate(90deg)' }),
                       width: 0, height: 0,
-                      borderLeft: `${pointerSize * 0.5}px solid transparent`,
-                      borderRight: `${pointerSize * 0.5}px solid transparent`,
-                      borderBottom: `${pointerSize}px solid ${pointerColor}`,
-                      filter: 'drop-shadow(0 0 4px rgba(0,0,0,0.6))',
+                      borderLeft: `8px solid transparent`,
+                      borderRight: `8px solid transparent`,
+                      borderBottom: `7px solid ${pointerColor}`,
+                      filter: 'drop-shadow(0 0 4px rgba(0,0,0,0.9))',
                     }} />
                   )}
                   {isBlessingTarget && (

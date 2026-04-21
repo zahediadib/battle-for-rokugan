@@ -5,20 +5,20 @@
 
 // ===== CLAN CONFIGURATION =====
 export const CLANS = {
-  crab:     { id: 'crab',     name: 'Crab',     color: '#9CA3AF', assetFolder: 'Gray',   capital: 'crab_3',     ability: 'Face-up control tokens have +2 defense instead of +1.' },
-  crane:    { id: 'crane',    name: 'Crane',    color: '#60A5FA', assetFolder: 'Blue',   capital: 'crane_3',    ability: 'When tied in battle, you win instead.' },
-  dragon:   { id: 'dragon',   name: 'Dragon',   color: '#34D399', assetFolder: 'Green',  capital: 'dragon_2',   ability: 'Draw 1 additional token, return 1 non-bluff.' },
-  lion:     { id: 'lion',     name: 'Lion',     color: '#FBBF24', assetFolder: 'Yellow', capital: 'lion_2',     ability: 'Bluff token has +2 defense and is not discarded defending.' },
-  phoenix:  { id: 'phoenix',  name: 'Phoenix',  color: '#FB923C', assetFolder: 'Orange', capital: 'phoenix_3',  ability: 'Ignore clan capital defenses when attacking.' },
-  scorpion: { id: 'scorpion', name: 'Scorpion', color: '#F87171', assetFolder: 'Red',    capital: 'scorpion_1', ability: 'Once per round, look at one combat token on the board.' },
-  unicorn:  { id: 'unicorn',  name: 'Unicorn',  color: '#A78BFA', assetFolder: 'Purple', capital: 'unicorn_2',  ability: 'Before reveal, switch two of your combat tokens.' },
+  crab:     { id: 'crab',     name: 'Crab',     color: '#7e7c91', assetFolder: 'Gray',   capital: 'crab_3',     ability: 'Face-up control tokens have +2 defense instead of +1.' },
+  crane:    { id: 'crane',    name: 'Crane',    color: '#4576b8', assetFolder: 'Blue',   capital: 'crane_3',    ability: 'When tied in battle, you win instead.' },
+  dragon:   { id: 'dragon',   name: 'Dragon',   color: '#618778', assetFolder: 'Green',  capital: 'dragon_2',   ability: 'Draw 1 additional token, return 1 non-bluff.' },
+  lion:     { id: 'lion',     name: 'Lion',     color: '#ccb25b', assetFolder: 'Yellow', capital: 'lion_2',     ability: 'Bluff token has +2 defense and is not discarded defending.' },
+  phoenix:  { id: 'phoenix',  name: 'Phoenix',  color: '#cd8855', assetFolder: 'Orange', capital: 'phoenix_3',  ability: 'Ignore clan capital defenses when attacking.' },
+  scorpion: { id: 'scorpion', name: 'Scorpion', color: '#a34a39', assetFolder: 'Red',    capital: 'scorpion_1', ability: 'Once per round, look at one combat token on the board.' },
+  unicorn:  { id: 'unicorn',  name: 'Unicorn',  color: '#7b588e', assetFolder: 'Purple', capital: 'unicorn_2',  ability: 'Before reveal, switch two of your combat tokens.' },
 };
 
 export const CLAN_LIST = Object.keys(CLANS);
 
 // ===== ASSET PATHS =====
 export const ASSETS = {
-  board: '/assets/board.png',
+  board: '/enhanced_board.png',
   music: '/assets/music.mp3',
   calligraphy: {
     shugenja: '/assets/shugenja.png',
