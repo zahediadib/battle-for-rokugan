@@ -179,26 +179,27 @@ function GameContent() {
     }
   }, [notifications, dismissNotification]);
 
-  if (!gameState) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0A0A0A]" data-testid="game-loading">
-        <div className="w-12 h-12 border-4 border-[#C41E3A] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-      </div>
-    );
-  }
+    const myPlayerIndex = gameState?.players?.findIndex(p => p.user_id === user?.user_id) ?? -1;
+    const myPlayer = myPlayerIndex >= 0 ? gameState.players[myPlayerIndex] : null;
+    const isUnicornSwitchTurn = gameState?.phase === 'unicorn_switch' && myPlayerIndex === gameState?.current_turn_index && myPlayer?.clan === 'unicorn';
 
-  const myPlayerIndex = gameState.players?.findIndex(p => p.user_id === user?.user_id);
-  const myPlayer = myPlayerIndex >= 0 ? gameState.players[myPlayerIndex] : null;
-  const isHost = gameState.host_user_id === user?.user_id;
-  const isSpectator = myPlayerIndex < 0;
-  const isUnicornSwitchTurn = gameState.phase === 'unicorn_switch' && myPlayerIndex === gameState.current_turn_index && myPlayer?.clan === 'unicorn';
+    useEffect(() => {
+        if (!isUnicornSwitchTurn) {
+            setUnicornSwitchMode(false);
+            setUnicornSelectedTokens([]);
+        }
+    }, [isUnicornSwitchTurn]);
 
-  useEffect(() => {
-    if (!isUnicornSwitchTurn) {
-      setUnicornSwitchMode(false);
-      setUnicornSelectedTokens([]);
+    if (!gameState) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-[#0A0A0A]" data-testid="game-loading">
+                <div className="w-12 h-12 border-4 border-[#C41E3A] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            </div>
+        );
     }
-  }, [isUnicornSwitchTurn]);
+
+    const isHost = gameState.host_user_id === user?.user_id;
+    const isSpectator = myPlayerIndex < 0;
 
   if (gameState.status === 'clan_selection') {
     return <ClanSelect gameState={gameState} myPlayer={myPlayer} sendAction={sendAction} isSpectator={isSpectator} />;
