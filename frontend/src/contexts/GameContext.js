@@ -13,6 +13,18 @@ export function GameProvider({ gameId, children }) {
   const [notifications, setNotifications] = useState([]);
   const wsRef = useRef(null);
   const reconnectRef = useRef(null);
+  const notificationTimersRef = useRef(new Map());
+  const nextNotificationIdRef = useRef(1);
+
+  const pushNotification = useCallback((message, isError = false) => {
+    const id = nextNotificationIdRef.current++;
+    setNotifications(prev => [...prev.slice(-9), { id, message, isError }]);
+    const timeout = setTimeout(() => {
+      setNotifications(prev => prev.filter(n => n.id !== id));
+      notificationTimersRef.current.delete(id);
+    }, 6000);
+    notificationTimersRef.current.set(id, timeout);
+  }, []);
 
   const connect = useCallback(() => {
     if (!gameId || !token) return;
@@ -33,9 +45,18 @@ export function GameProvider({ gameId, children }) {
         if (msg.type === 'game_state') {
           setGameState(msg.state);
         } else if (msg.type === 'notification') {
-          setNotifications(prev => [...prev.slice(-9), { id: Date.now(), message: msg.message }]);
+          pushNotification(msg.message);
+        } else if (msg.type === 'action_result' && msg.success) {
+          // These success payloads include structured hidden-info/event data that GamePage converts into centered announcement modals.
+          if (
+            msg.message?.startsWith('Scout used|') ||
+            msg.message?.startsWith('Scorpion spy|') ||
+            msg.message?.startsWith('territory_card|')
+          ) {
+            pushNotification(msg.message);
+          }
         } else if (msg.type === 'action_result' && !msg.success) {
-          setNotifications(prev => [...prev.slice(-9), { id: Date.now(), message: msg.message, isError: true }]);
+          pushNotification(msg.message, true);
         }
       } catch (e) {
         console.error('WS parse error:', e);
@@ -50,13 +71,15 @@ export function GameProvider({ gameId, children }) {
     ws.onerror = () => { ws.close(); };
 
     wsRef.current = ws;
-  }, [gameId, token]);
+  }, [gameId, token, pushNotification]);
 
   useEffect(() => {
     connect();
     return () => {
       if (wsRef.current) wsRef.current.close();
       if (reconnectRef.current) clearTimeout(reconnectRef.current);
+      notificationTimersRef.current.forEach((timeout) => clearTimeout(timeout));
+      notificationTimersRef.current.clear();
     };
   }, [connect]);
 
@@ -67,6 +90,11 @@ export function GameProvider({ gameId, children }) {
   }, []);
 
   const dismissNotification = useCallback((id) => {
+    const timeout = notificationTimersRef.current.get(id);
+    if (timeout) {
+      clearTimeout(timeout);
+      notificationTimersRef.current.delete(id);
+    }
     setNotifications(prev => prev.filter(n => n.id !== id));
   }, []);
 

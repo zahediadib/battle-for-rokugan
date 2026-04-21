@@ -181,6 +181,8 @@ def process_action(game, user_id, action):
         return process_scorpion_ability(game, player_idx, action)
     elif action_type == "use_unicorn_ability":
         return process_unicorn_ability(game, player_idx, action)
+    elif action_type == "pass_unicorn_ability":
+        return process_unicorn_pass(game, player_idx)
     elif action_type == "edit_positions":
         return process_edit_positions(game, player_idx, action)
     elif action_type == "dragon_return_token":
@@ -347,6 +349,7 @@ def start_round(game, round_num):
         p["passed_territory_card"] = False
         p["scorpion_ability_used"] = False
         p["dragon_must_return"] = False
+        p["unicorn_ability_used"] = False
 
     game["all_passed_territory"] = False
     game["resolution_revealed"] = False
@@ -492,10 +495,13 @@ def advance_placement_turn(game):
     # Check if all players have 1 token left (5 placed)
     all_done = all(len(p["hand"]) <= 1 for p in game["players"])
     if all_done:
-        game["phase"] = "resolution"
-        game["resolution_revealed"] = False
-        game["resolution_step"] = 0
-        game["log"].append("Placement complete. Resolution phase begins.")
+        unicorn_idx = next((i for i, p in enumerate(game["players"]) if p.get("clan") == "unicorn"), None)
+        if unicorn_idx is not None:
+            game["phase"] = "unicorn_switch"
+            game["current_turn_index"] = unicorn_idx
+            game["log"].append("Placement complete. Unicorn may switch two combat tokens or pass.")
+        else:
+            _begin_resolution_phase(game)
         return
 
     # Find next player who can still place
@@ -1301,38 +1307,68 @@ def process_unicorn_ability(game, player_idx, action):
     player = game["players"][player_idx]
     if player["clan"] != "unicorn":
         return False, "Only Unicorn can use this ability", game
-    if game["phase"] != "resolution" or game.get("resolution_revealed"):
-        return False, "Can only use before tokens are revealed", game
+    if game["phase"] != "unicorn_switch":
+        return False, "Can only use during Unicorn switch step", game
+    if game["current_turn_index"] != player_idx:
+        return False, "Not your turn", game
+    if player.get("unicorn_ability_used"):
+        return False, "Unicorn ability already used this round", game
 
     # Get two locations to swap
     loc1 = action.get("location1")  # {type: "province"|"border", id: "..."}
     loc2 = action.get("location2")
+    token1_id = action.get("token1_id")
+    token2_id = action.get("token2_id")
 
-    token1 = _extract_unicorn_token(game, player_idx, loc1)
-    token2 = _extract_unicorn_token(game, player_idx, loc2)
+    if not loc1 or not loc2 or not token1_id or not token2_id:
+        return False, "You must select two of your tokens", game
+    if loc1.get("type") == loc2.get("type") and loc1.get("id") == loc2.get("id"):
+        return False, "Choose tokens from two different locations", game
+
+    token1 = _extract_unicorn_token(game, player_idx, loc1, token1_id)
+    token2 = _extract_unicorn_token(game, player_idx, loc2, token2_id)
 
     if not token1 or not token2:
+        if token1:
+            _place_unicorn_token(game, token1, loc1)
+        if token2:
+            _place_unicorn_token(game, token2, loc2)
         return False, "Could not find your tokens at those locations", game
 
     # Place them swapped
     _place_unicorn_token(game, token2, loc1)
     _place_unicorn_token(game, token1, loc2)
 
+    player["unicorn_ability_used"] = True
+    _begin_resolution_phase(game)
     game["log"].append(f"Unicorn swapped two combat tokens.")
     return True, "Tokens swapped", game
 
 
-def _extract_unicorn_token(game, player_idx, loc):
+def process_unicorn_pass(game, player_idx):
+    player = game["players"][player_idx]
+    if player["clan"] != "unicorn":
+        return False, "Only Unicorn can pass this step", game
+    if game["phase"] != "unicorn_switch":
+        return False, "Can only pass during Unicorn switch step", game
+    if game["current_turn_index"] != player_idx:
+        return False, "Not your turn", game
+    _begin_resolution_phase(game)
+    game["log"].append("Unicorn passed their switch ability.")
+    return True, "Unicorn passed", game
+
+
+def _extract_unicorn_token(game, player_idx, loc, token_id):
     if not loc:
         return None
     if loc["type"] == "province" and loc["id"] in game["provinces"]:
         tokens = game["provinces"][loc["id"]]["combat_tokens"]
         for i, ct in enumerate(tokens):
-            if ct["player_index"] == player_idx:
+            if ct["player_index"] == player_idx and ct.get("id") == token_id:
                 return tokens.pop(i)
     elif loc["type"] == "border" and loc["id"] in game["borders"]:
         bt = game["borders"][loc["id"]]["combat_token"]
-        if bt and bt["player_index"] == player_idx:
+        if bt and bt["player_index"] == player_idx and bt.get("id") == token_id:
             game["borders"][loc["id"]]["combat_token"] = None
             return bt
     return None
@@ -1343,6 +1379,13 @@ def _place_unicorn_token(game, token, loc):
         game["provinces"][loc["id"]]["combat_tokens"].append(token)
     elif loc["type"] == "border":
         game["borders"][loc["id"]]["combat_token"] = token
+
+
+def _begin_resolution_phase(game):
+    game["phase"] = "resolution"
+    game["resolution_revealed"] = False
+    game["resolution_step"] = 0
+    game["log"].append("Resolution phase begins.")
 
 
 def process_play_territory_card(game, player_idx, action):
