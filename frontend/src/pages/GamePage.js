@@ -270,8 +270,7 @@ function GameContent() {
           const prevControlCount = prevProv?.control_tokens?.length || 0;
           const nextControlCount = nextProv?.control_tokens?.length || 0;
           if (nextControlCount > prevControlCount && gameState.status === 'setup' && gameState.phase === 'setup') {
-            const idx = nextControlCount - 1;
-            nextAnimations[`control:${provinceId}:${idx}`] = 'animate-token-zoom-out';
+            nextAnimations[`control:${provinceId}`] = 'animate-token-zoom-out';
             playControlPlacement = true;
           }
 

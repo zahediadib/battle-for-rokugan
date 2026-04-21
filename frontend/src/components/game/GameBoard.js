@@ -212,7 +212,7 @@ export default function GameBoard({
                     left: s(prov.center.x + Math.cos(angle) * r) - controlSize / 2,
                     top: s(prov.center.y + Math.sin(angle) * r) - controlSize / 2,
                     zIndex: 5, pointerEvents: 'none',
-                  }} className={tokenAnimationByKey[`control:${prov.id}:${idx}`] || ''}>
+                  }} className={tokenAnimationByKey[`control:${prov.id}`] || tokenAnimationByKey[`control:${prov.id}:${idx}`] || ''}>
                     <ControlToken ct={ct} players={gameState.players} size={controlSize} />
                   </div>
                 );
