@@ -93,8 +93,8 @@ export async function preloadGameAssets(onProgress) {
           await cache.put(fullUrl, response.clone());
         }
       }
-    } catch (_) {
-      // continue loading remaining assets
+    } catch (error) {
+      console.warn(`Asset preload failed for ${fullUrl}`, error);
     }
     done += 1;
     update('Downloading assets...');

@@ -515,7 +515,9 @@ export default function GamePage() {
         setAssetProgress(progress);
       }
     })
-      .catch(() => {})
+      .catch((error) => {
+        console.warn('Asset preload failed, continuing to game', error);
+      })
       .finally(() => {
         if (isMounted) {
           setAssetsReady(true);
