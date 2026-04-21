@@ -8,10 +8,13 @@ import requests
 import json
 import time
 import sys
+import os
 from datetime import datetime
 
 class RokuganAPITester:
-    def __init__(self, base_url="http://localhost:8001"):
+    def __init__(self, base_url=None):
+        if base_url is None:
+            base_url = os.getenv("ROKUGAN_BASE_URL", "http://localhost:8001")
         self.base_url = base_url
         self.token = None
         self.user_id = None

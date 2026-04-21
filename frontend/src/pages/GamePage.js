@@ -109,6 +109,7 @@ function GameContent() {
   const audioRef = useRef(null);
   const sfxRef = useRef({});
   const prevStateRef = useRef(null);
+  const gameStateRef = useRef(null);
   const [musicVolume, setMusicVolume] = useState(0.45);
   const [showVolumeControl, setShowVolumeControl] = useState(false);
   const [abilityMode, setAbilityMode] = useState(null);
@@ -157,6 +158,10 @@ function GameContent() {
     sfxRef.current = players;
   }, []);
 
+  useEffect(() => {
+    gameStateRef.current = gameState;
+  }, [gameState]);
+
   // Handle shugenja results (broadcast to all)
   useEffect(() => {
     if (gameState?.shugenja_result) {
@@ -184,7 +189,7 @@ function GameContent() {
         const tokenData = JSON.parse(msg.split('|')[1]);
         playSfx('scout');
         if (tokenData.location === 'border' && tokenData.border_id) {
-          const bt = gameState?.borders?.[tokenData.border_id]?.combat_token;
+          const bt = gameStateRef.current?.borders?.[tokenData.border_id]?.combat_token;
           if (bt?.id) {
             setHighlightTone('blue');
             setHighlightedTokenKey(`border:${tokenData.border_id}:${bt.id}`);
@@ -192,7 +197,7 @@ function GameContent() {
           }
         }
         if (tokenData.location === 'province' && tokenData.province_id) {
-          const provTokens = gameState?.provinces?.[tokenData.province_id]?.combat_tokens || [];
+          const provTokens = gameStateRef.current?.provinces?.[tokenData.province_id]?.combat_tokens || [];
           const target = provTokens.find(t => t.player_index === tokenData.player_index && t.type === tokenData.type && t.strength === tokenData.strength);
           if (target?.id) {
             setHighlightTone('blue');
@@ -237,7 +242,7 @@ function GameContent() {
       } catch (e) {}
       dismissNotification(latest.id);
     }
-  }, [notifications, dismissNotification, gameState]);
+  }, [notifications, dismissNotification]);
 
     const myPlayerIndex = gameState?.players?.findIndex(p => p.user_id === user?.user_id) ?? -1;
     const myPlayer = myPlayerIndex >= 0 ? gameState.players[myPlayerIndex] : null;
@@ -286,7 +291,6 @@ function GameContent() {
             nextAnimations[`border:${borderId}:${nextToken.id}`] = 'animate-token-fly-in';
             playCombatPlacement = true;
           }
-          if (prevToken && nextToken && prevToken.id === nextToken.id) return;
         });
 
         const prevLoc = {};
