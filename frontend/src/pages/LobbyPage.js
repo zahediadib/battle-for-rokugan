@@ -31,6 +31,7 @@ export default function LobbyPage() {
   }, [loadRooms]);
 
   useEffect(() => {
+    if (!user?.user_id) return;
     const activeMyRoom = rooms.find(
       room =>
         room.status === 'playing' &&

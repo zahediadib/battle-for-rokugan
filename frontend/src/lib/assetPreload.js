@@ -88,7 +88,7 @@ export async function preloadGameAssets(onProgress) {
     try {
       let response = cache ? await cache.match(fullUrl) : null;
       if (!response) {
-        response = await fetch(fullUrl, { cache: 'force-cache' });
+        response = await fetch(fullUrl, { cache: 'default' });
         if (cache && response.ok) {
           await cache.put(fullUrl, response.clone());
         }
