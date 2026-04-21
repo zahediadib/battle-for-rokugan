@@ -149,7 +149,7 @@ export default function GameBoard({
   );
 
   return (
-    <div ref={containerRef} className="flex-1 overflow-auto flex items-center justify-center bg-[#0A0A0A] relative select-none" data-testid="game-board">
+    <div ref={containerRef} className="flex-1 overflow-auto flex items-center justify-center bg-[#0A0A0A] relative" data-testid="game-board">
       <div style={{ width: s(BOARD_W), height: s(BOARD_H), position: 'relative' }} className="shrink-0">
         <img src="/assets/board.png" alt="Battle Map" style={{ width: '100%', height: '100%' }} className="select-none pointer-events-none" draggable={false} />
 
@@ -175,10 +175,11 @@ export default function GameBoard({
                 style={{
                   position: 'absolute', left: s(prov.center.x) - s(50), top: s(prov.center.y) - s(50),
                   width: s(100), height: s(100), borderRadius: '50%',
-                  cursor: 'pointer', zIndex: 10,
-                  border: isSource ? '3px solid #D4AF37' : abilityMode ? '2px dashed rgba(196,30,58,0.4)' : blessingMode ? '2px dashed rgba(212,175,55,0.4)' : 'none',
-                  backgroundColor: isSource ? 'rgba(212,175,55,0.2)' : 'transparent',
-                }}
+                   cursor: 'pointer', zIndex: 10,
+                   border: isSource ? '3px solid #D4AF37' : abilityMode ? '2px dashed rgba(196,30,58,0.4)' : blessingMode ? '2px dashed rgba(212,175,55,0.4)' : 'none',
+                   backgroundColor: isSource ? 'rgba(212,175,55,0.2)' : 'transparent',
+                   userSelect: 'none',
+                 }}
                 className="province-clickable"
                 title={prov.id}
               />
@@ -219,6 +220,7 @@ export default function GameBoard({
                     top: s(prov.center.y + Math.sin(angle) * r) - tokenSize / 2,
                     zIndex: 15, pointerEvents: (isClickableForBlessing || isClickableForInfo) ? 'auto' : 'none',
                     cursor: (isClickableForBlessing || isClickableForInfo) ? 'pointer' : 'default',
+                    userSelect: 'none',
                   }} onClick={() => {
                     if (isClickableForBlessing) onProvinceClick(prov.id);
                     else if (isClickableForInfo && onCombatTokenClick) onCombatTokenClick({ token: ct, location: { type: 'province', id: prov.id } });
@@ -294,6 +296,7 @@ export default function GameBoard({
                   cursor: (isClickable || isAbilityTarget || isBlessingTarget) ? 'pointer' : 'default', zIndex: 12,
                   backgroundColor: isAbilityTarget ? 'rgba(196,30,58,0.25)' : isBlessingTarget ? 'rgba(212,175,55,0.25)' : isClickable ? 'rgba(196,30,58,0.12)' : 'transparent',
                   border: isClickable ? '1px dashed rgba(255,255,255,0.15)' : 'none',
+                  userSelect: 'none',
                 }}
               />
 
@@ -306,6 +309,7 @@ export default function GameBoard({
                   zIndex: 15,
                   pointerEvents: (isAbilityTarget || isBlessingTarget || isOwnToken) ? 'auto' : 'none',
                   cursor: (isAbilityTarget || isBlessingTarget || isOwnToken) ? 'pointer' : 'default',
+                  userSelect: 'none',
                 }} onClick={() => {
                   if (isAbilityTarget || isBlessingTarget) onBorderClick(border.id);
                   else if (isOwnToken && onCombatTokenClick) onCombatTokenClick({ token: hasCombat, location: { type: 'border', id: border.id } });
@@ -351,6 +355,7 @@ export default function GameBoard({
               backgroundColor: sourceProvince === 'sea' ? 'rgba(96,165,250,0.2)' : 'rgba(96,165,250,0.06)',
               border: sourceProvince === 'sea' ? '2px solid rgba(96,165,250,0.5)' : '2px dashed rgba(96,165,250,0.2)',
               borderRadius: '4px', cursor: 'pointer', zIndex: 8,
+              userSelect: 'none',
             }}
           />
         )}
