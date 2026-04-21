@@ -694,8 +694,10 @@ def resolve_all_province_battles(game):
                 bt = game["borders"][b["id"]]["combat_token"]
                 if bt and bt["type"] in ("army", "navy"):
                     # Determine if attacking this province
-                    other_province = [p for p in b["provinces"] if p != prov_id and p != "sea"][0] if len([p for p in b["provinces"] if p != prov_id]) > 0 else None
-                    if other_province and other_province != "sea":
+                    other_provinces = [p for p in b["provinces"] if p != prov_id and p != "sea"]
+                    other_province = other_provinces[0] if other_provinces else None
+                    
+                    if other_province:
                         # Token on border between other_province and this province
                         # It's an attack if the player controls the other province
                         other_prov = game["provinces"].get(other_province)
