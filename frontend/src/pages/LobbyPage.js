@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, Users, LogOut, Crown, Play, DoorOpen, Trash2 } from 'lucide-react';
 
 export default function LobbyPage() {
-  const { user, token, logout, authAxios } = useAuth();
+  const { user, logout, authAxios } = useAuth();
   const navigate = useNavigate();
   const [rooms, setRooms] = useState([]);
   const [showCreate, setShowCreate] = useState(false);
@@ -30,24 +30,11 @@ export default function LobbyPage() {
     return () => clearInterval(interval);
   }, [loadRooms]);
 
-  useEffect(() => {
-    if (!user?.user_id) return;
-    const activeMyRoom = rooms.find(
-      room =>
-        room.status === 'playing' &&
-        room.game_id &&
-        room.players?.some(p => p.user_id === user?.user_id)
-    );
-    if (activeMyRoom) {
-      navigate(`/game/${activeMyRoom.game_id}`);
-    }
-  }, [rooms, user?.user_id, navigate]);
-
   const createRoom = async () => {
     if (!roomName.trim()) return;
     setLoading(true);
     try {
-      const res = await api.post('/rooms', { name: roomName, max_players: maxPlayers });
+      await api.post('/rooms', { name: roomName, max_players: maxPlayers });
       setShowCreate(false);
       setRoomName('');
       loadRooms();
@@ -84,7 +71,14 @@ export default function LobbyPage() {
     }
   };
 
-  const myRoom = rooms.find(r => r.players?.some(p => p.user_id === user?.user_id));
+  const deleteRoom = async (roomId) => {
+    try {
+      await api.delete(`/rooms/${roomId}`);
+      loadRooms();
+    } catch (e) {
+      setError(e.response?.data?.detail || 'Failed to remove room');
+    }
+  };
 
   return (
     <div className="min-h-screen relative overflow-hidden" data-testid="lobby-page">
@@ -199,13 +193,14 @@ export default function LobbyPage() {
                 style={{ animationDelay: `${idx * 0.05}s` }}
               >
                 <div className="flex items-center gap-4">
-                  <div className={`w-3 h-3 rounded-full ${room.status === 'waiting' ? 'bg-[#2E7D32]' : 'bg-[#F57C00]'}`} />
+                  <div className={`w-3 h-3 rounded-full ${room.status === 'waiting' ? 'bg-[#2E7D32]' : room.status === 'playing' ? 'bg-[#F57C00]' : 'bg-[#71717A]'}`} />
                   <div>
                     <h3 className="font-heading text-lg font-bold text-[#F5F5F0]">{room.name}</h3>
                     <div className="flex items-center gap-3 mt-1 text-sm text-[#A1A1AA]">
                       <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5" /> {room.players?.length}/{room.max_players}</span>
                       <span className="flex items-center gap-1"><Crown className="w-3.5 h-3.5 text-[#D4AF37]" /> {room.host_username}</span>
                       {room.status === 'playing' && <span className="text-[#F57C00]">In Game</span>}
+                      {room.status === 'finished' && <span className="text-[#A1A1AA]">Finished</span>}
                     </div>
                     {/* Player list */}
                     <div className="flex gap-2 mt-2 flex-wrap">
@@ -216,7 +211,16 @@ export default function LobbyPage() {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  {room.status === 'playing' && room.game_id && (
+                  {room.status === 'playing' && room.game_id && isInRoom && (
+                    <button
+                      data-testid={`enter-game-btn-${idx}`}
+                      onClick={() => navigate(`/game/${room.game_id}`)}
+                      className="px-4 py-2 text-xs uppercase font-bold tracking-wider bg-[#D4AF37] text-black hover:bg-[#B5952F] rounded-sm transition-colors"
+                    >
+                      Enter Game
+                    </button>
+                  )}
+                  {room.status === 'playing' && room.game_id && !isInRoom && (
                     <button
                       data-testid={`spectate-btn-${idx}`}
                       onClick={() => navigate(`/game/${room.game_id}?spectate=true`)}
@@ -251,6 +255,15 @@ export default function LobbyPage() {
                       className="px-4 py-2 text-xs uppercase font-bold tracking-wider bg-[#D4AF37] text-black hover:bg-[#B5952F] rounded-sm transition-colors disabled:opacity-40"
                     >
                       <Play className="w-4 h-4 inline mr-1" /> Start
+                    </button>
+                  )}
+                  {room.status === 'finished' && isHost && (
+                    <button
+                      data-testid={`remove-room-btn-${idx}`}
+                      onClick={() => deleteRoom(room.room_id)}
+                      className="px-4 py-2 text-xs uppercase font-bold tracking-wider bg-transparent border border-[#D32F2F] text-[#F87171] hover:bg-[#D32F2F]/10 rounded-sm transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4 inline mr-1" /> Remove
                     </button>
                   )}
                 </div>

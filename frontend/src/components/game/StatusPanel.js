@@ -6,13 +6,19 @@ import { CLANS, TERRITORY_LABELS } from '../../constants/gameConstants';
 const CLAN_ABILITIES = Object.fromEntries(Object.entries(CLANS).map(([k, v]) => [k, v.ability]));
 const CLAN_LABELS = Object.fromEntries(Object.entries(CLANS).map(([k, v]) => [k, v.name]));
 
-export default function StatusPanel({ gameState, myPlayerIndex, isHost, sendAction }) {
+export default function StatusPanel({
+  gameState, myPlayerIndex, isHost, sendAction,
+  unicornSwitchMode, unicornSelectedTokens, onUnicornSwitchStart, onUnicornSwitchCancel, onUnicornSwitchConfirm,
+}) {
   const [expandedClan, setExpandedClan] = useState(null);
   const [showLog, setShowLog] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [showFinalScores, setShowFinalScores] = useState(false);
 
   const isResolution = gameState.phase === 'resolution';
   const canProceed = isHost && isResolution;
+  const myPlayer = myPlayerIndex >= 0 ? gameState.players?.[myPlayerIndex] : null;
+  const isUnicornTurn = gameState.phase === 'unicorn_switch' && myPlayerIndex === gameState.current_turn_index && myPlayer?.clan === 'unicorn';
 
   return (
     <div className="w-72 bg-[#161618] border-r border-white/5 flex flex-col shrink-0 overflow-hidden" data-testid="status-panel">
@@ -59,6 +65,57 @@ export default function StatusPanel({ gameState, myPlayerIndex, isHost, sendActi
                 >
                   Pass
                 </button>
+              )}
+            </div>
+          )}
+
+          {/* Unicorn switch step */}
+          {gameState.phase === 'unicorn_switch' && (
+            <div className="glass-panel rounded-sm p-3">
+              <div className="text-[10px] text-[#A78BFA] uppercase tracking-wider font-bold mb-1">Unicorn Ability</div>
+              {isUnicornTurn ? (
+                <>
+                  {!unicornSwitchMode ? (
+                    <div className="space-y-2">
+                      <button
+                        data-testid="unicorn-switch-start"
+                        onClick={onUnicornSwitchStart}
+                        className="w-full py-2 bg-[#A78BFA]/20 hover:bg-[#A78BFA]/30 text-[#E9D5FF] text-xs font-bold uppercase tracking-wider rounded-sm transition-colors"
+                      >
+                        Switch
+                      </button>
+                      <button
+                        data-testid="unicorn-switch-pass"
+                        onClick={() => sendAction({ action: 'pass_unicorn_ability' })}
+                        className="w-full py-2 bg-white/10 hover:bg-white/20 text-[#A1A1AA] hover:text-white text-xs font-bold uppercase tracking-wider rounded-sm transition-colors"
+                      >
+                        Pass
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-xs text-[#F5F5F0]">Select two of your placed combat tokens.</p>
+                      <p className="text-[10px] text-[#A1A1AA]">{unicornSelectedTokens.length}/2 selected</p>
+                      <button
+                        data-testid="unicorn-switch-confirm"
+                        disabled={unicornSelectedTokens.length !== 2}
+                        onClick={onUnicornSwitchConfirm}
+                        className="w-full py-2 bg-[#A78BFA]/20 hover:bg-[#A78BFA]/30 text-[#E9D5FF] text-xs font-bold uppercase tracking-wider rounded-sm transition-colors disabled:opacity-40"
+                      >
+                        Confirm Switch
+                      </button>
+                      <button
+                        data-testid="unicorn-switch-cancel"
+                        onClick={onUnicornSwitchCancel}
+                        className="w-full py-2 bg-white/10 hover:bg-white/20 text-[#A1A1AA] hover:text-white text-xs font-bold uppercase tracking-wider rounded-sm transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <p className="text-xs text-[#A1A1AA]">Waiting for Unicorn to switch or pass.</p>
               )}
             </div>
           )}
@@ -235,7 +292,13 @@ export default function StatusPanel({ gameState, myPlayerIndex, isHost, sendActi
           {/* Scores (end game) */}
           {gameState.scores && (
             <div className="glass-panel rounded-sm p-3">
-              <div className="text-[10px] text-[#D4AF37] uppercase tracking-wider font-bold mb-2">Final Scores</div>
+              <button
+                onClick={() => setShowFinalScores(true)}
+                className="text-[10px] text-[#D4AF37] uppercase tracking-wider font-bold mb-2 hover:text-[#FCD34D] transition-colors"
+                data-testid="final-scores-open"
+              >
+                Final Scores
+              </button>
               {gameState.scores.map((score, idx) => (
                 <div key={idx} className="flex items-center justify-between py-1">
                   <span className="font-heading font-bold" style={{ color: CLANS[score.clan]?.color }}>{idx + 1}. {CLANS[score.clan]?.name}</span>
@@ -246,6 +309,32 @@ export default function StatusPanel({ gameState, myPlayerIndex, isHost, sendActi
           )}
         </div>
       </ScrollArea>
+
+      {showFinalScores && gameState.scores && (
+        <div className="fixed inset-0 z-[97] flex items-center justify-center" onClick={() => setShowFinalScores(false)} data-testid="final-scores-modal">
+          <div className="absolute inset-0 bg-black/65" />
+          <div className="relative z-10 glass-panel rounded-sm p-5 w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-heading text-xl font-bold text-[#D4AF37]">Final Scores</h3>
+              <button className="text-[#A1A1AA] hover:text-white text-sm" onClick={() => setShowFinalScores(false)}>Close</button>
+            </div>
+            <div className="space-y-2">
+              {gameState.scores.map((score, idx) => (
+                <div key={`${score.clan}-${idx}`} className="bg-white/5 rounded-sm p-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-heading font-bold" style={{ color: CLANS[score.clan]?.color }}>{idx + 1}. {CLANS[score.clan]?.name}</span>
+                    <span className="text-[#D4AF37] font-bold">{score.honor} Honor</span>
+                  </div>
+                  <div className="text-[11px] text-[#A1A1AA] mt-1">
+                    <div>Player: {score.username}</div>
+                    <div>Objective Honor: {score.objective_honor || 0}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

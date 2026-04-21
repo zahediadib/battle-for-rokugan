@@ -136,8 +136,13 @@ async def create_room(inp: RoomCreateInput, request: Request):
 
 @api_router.get("/rooms")
 async def list_rooms(request: Request):
-    await get_current_user(request)
-    rooms = await db.rooms.find({"status": {"$in": ["waiting", "playing"]}}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    user = await get_current_user(request)
+    rooms = await db.rooms.find({
+        "$or": [
+            {"status": {"$in": ["waiting", "playing"]}},
+            {"status": "finished", "host_user_id": user["user_id"]},
+        ]
+    }, {"_id": 0}).sort("created_at", -1).to_list(50)
     return rooms
 
 @api_router.get("/rooms/{room_id}")
@@ -202,6 +207,24 @@ async def start_game(room_id: str, request: Request):
     await ws_manager.broadcast_state(game_state["game_id"])
 
     return {"game_id": game_state["game_id"]}
+
+
+@api_router.delete("/rooms/{room_id}")
+async def delete_room(room_id: str, request: Request):
+    user = await get_current_user(request)
+    room = await db.rooms.find_one({"room_id": room_id})
+    if not room:
+        raise HTTPException(404, "Room not found")
+    if room["host_user_id"] != user["user_id"]:
+        raise HTTPException(403, "Only host can remove the room")
+    if room.get("status") != "finished":
+        raise HTTPException(400, "Room can only be removed after game finish")
+
+    game_id = room.get("game_id")
+    if game_id:
+        await db.games.delete_one({"game_id": game_id})
+    await db.rooms.delete_one({"room_id": room_id})
+    return {"message": "Room and game removed"}
 
 
 # === Game HTTP Endpoints ===
@@ -356,12 +379,18 @@ async def websocket_endpoint(ws: WebSocket, game_id: str):
             success, message, updated_game = process_action(game, user_id, action)
 
             if success:
+                shugenja_res = updated_game.get("_shugenja_result")
                 # Save to DB (clear ephemeral results)
                 updated_game.pop("_scout_result", None)
                 updated_game.pop("_shugenja_result", None)
                 updated_game.pop("_scorpion_result", None)
                 territory_card_played = updated_game.pop("_territory_card_played", None)
                 await db.games.replace_one({"game_id": game_id}, updated_game)
+                if updated_game.get("status") == "finished":
+                    await db.rooms.update_one(
+                        {"room_id": updated_game["room_id"]},
+                        {"$set": {"status": "finished"}}
+                    )
                 # Broadcast to all
                 await ws_manager.broadcast_state(game_id)
                 await ws.send_json({"type": "action_result", "success": True, "message": message})
@@ -370,7 +399,6 @@ async def websocket_endpoint(ws: WebSocket, game_id: str):
                     await ws_manager.send_notification(game_id, message)
                 # Broadcast shugenja result to all
                 if action.get("action") == "use_shugenja":
-                    shugenja_res = game.get("_shugenja_result")
                     if shugenja_res:
                         await ws_manager.send_notification(game_id, f"Shugenja revealed: {shugenja_res['token']['type']} {shugenja_res['token']['strength']}")
                 # Broadcast territory card play to all

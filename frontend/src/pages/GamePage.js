@@ -70,6 +70,27 @@ function ObjectiveDetailModal({ objectiveId, onClose }) {
   );
 }
 
+function CombatTokenInfoModal({ selection, players, onClose }) {
+  if (!selection) return null;
+  const token = selection.token;
+  const owner = players?.[token.player_index];
+  return (
+    <div className="fixed inset-0 z-[98] flex items-center justify-center" onClick={onClose} data-testid="combat-token-info-modal">
+      <div className="absolute inset-0 bg-black/60" />
+      <div className="relative z-10 glass-panel rounded-sm p-5 max-w-sm w-full mx-4" onClick={(e) => e.stopPropagation()}>
+        <h3 className="font-heading text-xl font-bold text-[#D4AF37] mb-3">Combat Token</h3>
+        <div className="space-y-1 text-sm">
+          <div className="text-[#F5F5F0] capitalize"><span className="text-[#A1A1AA]">Type:</span> {token.type}</div>
+          <div className="text-[#F5F5F0]"><span className="text-[#A1A1AA]">Strength:</span> {token.strength}</div>
+          <div className="text-[#F5F5F0]"><span className="text-[#A1A1AA]">Owner:</span> {owner?.clan || owner?.username || 'Unknown'}</div>
+          <div className="text-[#F5F5F0] capitalize"><span className="text-[#A1A1AA]">Location:</span> {selection.location.type} {selection.location.id}</div>
+        </div>
+        <button onClick={onClose} className="mt-4 px-6 py-2 bg-white/10 hover:bg-white/20 text-white rounded-sm text-sm font-bold uppercase">Close</button>
+      </div>
+    </div>
+  );
+}
+
 function GameContent() {
   const { gameState, connected, sendAction, notifications, dismissNotification, user } = useGame();
   const [selectedToken, setSelectedToken] = useState(null);
@@ -82,8 +103,11 @@ function GameContent() {
   const [selectedProvinceInfo, setSelectedProvinceInfo] = useState(null);
   const [announcement, setAnnouncement] = useState(null);
   const [objectiveDetail, setObjectiveDetail] = useState(null);
+  const [selectedCombatTokenInfo, setSelectedCombatTokenInfo] = useState(null);
   // Blessing targeting
   const [blessingMode, setBlessingMode] = useState(null); // token to place as blessing
+  const [unicornSwitchMode, setUnicornSwitchMode] = useState(false);
+  const [unicornSelectedTokens, setUnicornSelectedTokens] = useState([]);
 
   const toggleMusic = () => {
     if (audioRef.current) {
@@ -167,6 +191,14 @@ function GameContent() {
   const myPlayer = myPlayerIndex >= 0 ? gameState.players[myPlayerIndex] : null;
   const isHost = gameState.host_user_id === user?.user_id;
   const isSpectator = myPlayerIndex < 0;
+  const isUnicornSwitchTurn = gameState.phase === 'unicorn_switch' && myPlayerIndex === gameState.current_turn_index && myPlayer?.clan === 'unicorn';
+
+  useEffect(() => {
+    if (!isUnicornSwitchTurn) {
+      setUnicornSwitchMode(false);
+      setUnicornSelectedTokens([]);
+    }
+  }, [isUnicornSwitchTurn]);
 
   if (gameState.status === 'clan_selection') {
     return <ClanSelect gameState={gameState} myPlayer={myPlayer} sendAction={sendAction} isSpectator={isSpectator} />;
@@ -297,6 +329,24 @@ function GameContent() {
     setAbilityMode(null); setBlessingMode(null);
   };
 
+  const handleCombatTokenClick = (selection) => {
+    if (unicornSwitchMode && isUnicornSwitchTurn) {
+      setUnicornSelectedTokens((prev) => {
+        const key = `${selection.location.type}:${selection.location.id}:${selection.token.id}`;
+        const existingIndex = prev.findIndex(item => `${item.location.type}:${item.location.id}:${item.token.id}` === key);
+        if (existingIndex >= 0) {
+          return prev.filter((_, idx) => idx !== existingIndex);
+        }
+        if (prev.length >= 2) {
+          return [prev[1], selection];
+        }
+        return [...prev, selection];
+      });
+      return;
+    }
+    setSelectedCombatTokenInfo(selection);
+  };
+
   return (
     <div className="h-screen flex flex-col bg-[#0A0A0A] overflow-hidden" data-testid="game-page">
       <audio ref={audioRef} src="/assets/music.mp3" loop preload="auto" />
@@ -349,7 +399,29 @@ function GameContent() {
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
-        <StatusPanel gameState={gameState} myPlayerIndex={myPlayerIndex} isHost={isHost} sendAction={sendAction} />
+        <StatusPanel
+          gameState={gameState}
+          myPlayerIndex={myPlayerIndex}
+          isHost={isHost}
+          sendAction={sendAction}
+          unicornSwitchMode={unicornSwitchMode}
+          unicornSelectedTokens={unicornSelectedTokens}
+          onUnicornSwitchStart={() => { setUnicornSwitchMode(true); setUnicornSelectedTokens([]); }}
+          onUnicornSwitchCancel={() => { setUnicornSwitchMode(false); setUnicornSelectedTokens([]); }}
+          onUnicornSwitchConfirm={() => {
+            if (unicornSelectedTokens.length !== 2) return;
+            const [first, second] = unicornSelectedTokens;
+            sendAction({
+              action: 'use_unicorn_ability',
+              location1: first.location,
+              location2: second.location,
+              token1_id: first.token.id,
+              token2_id: second.token.id,
+            });
+            setUnicornSwitchMode(false);
+            setUnicornSelectedTokens([]);
+          }}
+        />
         <div className="flex-1 flex flex-col overflow-hidden">
           <GameBoard
             gameState={gameState} myPlayerIndex={myPlayerIndex}
@@ -357,6 +429,9 @@ function GameContent() {
             placementStep={placementStep}
             onProvinceClick={handleProvinceClick} onBorderClick={handleBorderClick} onSeaClick={handleSeaClick}
             abilityMode={abilityMode} blessingMode={blessingMode}
+            onCombatTokenClick={handleCombatTokenClick}
+            unicornSwitchMode={unicornSwitchMode && isUnicornSwitchTurn}
+            unicornSelectedTokens={unicornSelectedTokens}
           />
           {myPlayer && !isSpectator && (
             <div className="h-28 bg-[#161618] border-t border-white/5 px-4 py-2 flex items-center gap-3 shrink-0">
@@ -379,6 +454,11 @@ function GameContent() {
 
       {/* Objective Detail */}
       {objectiveDetail && <ObjectiveDetailModal objectiveId={objectiveDetail} onClose={() => setObjectiveDetail(null)} />}
+      <CombatTokenInfoModal
+        selection={selectedCombatTokenInfo}
+        players={gameState.players}
+        onClose={() => setSelectedCombatTokenInfo(null)}
+      />
 
       {/* Ability Modal */}
       <AbilityModal type={abilityModal.type} isOpen={abilityModal.open}

@@ -99,7 +99,11 @@ const BORDERS_DATA = [
   { id: "76", provinces: ["phoenix_1", "sea"], type: "sea", point: { x: 3213, y: 1927 }, isUpDown: true },
 ];
 
-export default function GameBoard({ gameState, myPlayerIndex, selectedToken, sourceProvince, placementStep, onProvinceClick, onBorderClick, onSeaClick, abilityMode, blessingMode }) {
+export default function GameBoard({
+  gameState, myPlayerIndex, selectedToken, sourceProvince, placementStep,
+  onProvinceClick, onBorderClick, onSeaClick, abilityMode, blessingMode,
+  onCombatTokenClick, unicornSwitchMode, unicornSelectedTokens = [],
+}) {
   const containerRef = useRef(null);
   const [scale, setScale] = useState(1);
 
@@ -139,9 +143,14 @@ export default function GameBoard({ gameState, myPlayerIndex, selectedToken, sou
     return info;
   }, [gameState]);
 
+  const selectedTokenKeys = useMemo(
+    () => new Set(unicornSelectedTokens.map(t => `${t.location.type}:${t.location.id}:${t.token.id}`)),
+    [unicornSelectedTokens]
+  );
+
   return (
-    <div ref={containerRef} className="flex-1 overflow-auto flex items-center justify-center bg-[#0A0A0A] relative" data-testid="game-board">
-      <div style={{ width: s(BOARD_W), height: s(BOARD_H), position: 'relative' }} className="shrink-0">
+    <div ref={containerRef} className="flex-1 overflow-auto flex items-center justify-center bg-[#0A0A0A] relative select-none" data-testid="game-board">
+      <div style={{ width: s(BOARD_W), height: s(BOARD_H), position: 'relative', userSelect: 'none' }} className="shrink-0">
         <img src="/assets/board.png" alt="Battle Map" style={{ width: '100%', height: '100%' }} className="select-none pointer-events-none" draggable={false} />
 
         {/* Provinces */}
@@ -198,20 +207,33 @@ export default function GameBoard({ gameState, myPlayerIndex, selectedToken, sou
                 const r = 50;
                 const playerColor = ct.player_index !== undefined && gameState.players[ct.player_index]
                   ? gameState.players[ct.player_index].color : 'Gray';
-                const isClickableForBlessing = blessingMode && ct.player_index === myPlayerIndex;
+                const isOwnToken = ct.player_index === myPlayerIndex && ct.type !== 'hidden';
+                const isClickableForBlessing = blessingMode && isOwnToken;
+                const isClickableForInfo = isOwnToken && !isClickableForBlessing;
+                const selectedKey = `province:${prov.id}:${ct.id}`;
+                const isSelectedForUnicorn = selectedTokenKeys.has(selectedKey);
                 return (
                   <div key={`combat-${prov.id}-${idx}`} style={{
                     position: 'absolute',
                     left: s(prov.center.x + Math.cos(angle) * r) - tokenSize / 2,
                     top: s(prov.center.y + Math.sin(angle) * r) - tokenSize / 2,
-                    zIndex: 15, pointerEvents: isClickableForBlessing ? 'auto' : 'none',
-                    cursor: isClickableForBlessing ? 'pointer' : 'default',
-                  }} onClick={() => isClickableForBlessing && onProvinceClick(prov.id)}>
+                    zIndex: 15, pointerEvents: (isClickableForBlessing || isClickableForInfo) ? 'auto' : 'none',
+                    cursor: (isClickableForBlessing || isClickableForInfo) ? 'pointer' : 'default',
+                  }} onClick={() => {
+                    if (isClickableForBlessing) onProvinceClick(prov.id);
+                    else if (isClickableForInfo && onCombatTokenClick) onCombatTokenClick({ token: ct, location: { type: 'province', id: prov.id } });
+                  }}>
                     <CombatToken token={ct} color={playerColor} faceUp={ct.face_up} size={tokenSize} />
                     {isClickableForBlessing && (
                       <div style={{
                         position: 'absolute', inset: -3, borderRadius: '50%',
                         border: '2px dashed #D4AF37', animation: 'pulse-gold 1.5s ease-in-out infinite',
+                      }} />
+                    )}
+                    {unicornSwitchMode && isSelectedForUnicorn && (
+                      <div style={{
+                        position: 'absolute', inset: -3, borderRadius: '50%',
+                        border: '2px solid #A78BFA', boxShadow: '0 0 10px rgba(167,139,250,0.75)',
                       }} />
                     )}
                   </div>
@@ -238,6 +260,9 @@ export default function GameBoard({ gameState, myPlayerIndex, selectedToken, sou
           const isClickable = canInteract && !hasCombat && selectedToken;
           const isAbilityTarget = abilityMode && hasCombat;
           const isBlessingTarget = blessingMode && hasCombat && hasCombat.player_index === myPlayerIndex;
+          const isOwnToken = hasCombat && hasCombat.player_index === myPlayerIndex && hasCombat.type !== 'hidden';
+          const selectedKey = hasCombat ? `border:${border.id}:${hasCombat.id}` : null;
+          const isSelectedForUnicorn = selectedKey ? selectedTokenKeys.has(selectedKey) : false;
 
           // Direction pointer: based on isUpDown and which province the attacker controls
           let pointerDir = null; // 'top' | 'bottom' | 'left' | 'right'
@@ -279,9 +304,12 @@ export default function GameBoard({ gameState, myPlayerIndex, selectedToken, sou
                   left: s(border.point.x) - tokenSize / 2,
                   top: s(border.point.y) - tokenSize / 2,
                   zIndex: 15,
-                  pointerEvents: (isAbilityTarget || isBlessingTarget) ? 'auto' : 'none',
-                  cursor: (isAbilityTarget || isBlessingTarget) ? 'pointer' : 'default',
-                }} onClick={() => (isAbilityTarget || isBlessingTarget) && onBorderClick(border.id)}>
+                  pointerEvents: (isAbilityTarget || isBlessingTarget || isOwnToken) ? 'auto' : 'none',
+                  cursor: (isAbilityTarget || isBlessingTarget || isOwnToken) ? 'pointer' : 'default',
+                }} onClick={() => {
+                  if (isAbilityTarget || isBlessingTarget) onBorderClick(border.id);
+                  else if (isOwnToken && onCombatTokenClick) onCombatTokenClick({ token: hasCombat, location: { type: 'border', id: border.id } });
+                }}>
                   <CombatToken
                     token={hasCombat}
                     color={hasCombat.player_index !== undefined && gameState.players[hasCombat.player_index] ? gameState.players[hasCombat.player_index].color : 'Gray'}
@@ -304,6 +332,9 @@ export default function GameBoard({ gameState, myPlayerIndex, selectedToken, sou
                   )}
                   {isBlessingTarget && (
                     <div style={{ position: 'absolute', inset: -3, borderRadius: '50%', border: '2px dashed #D4AF37' }} />
+                  )}
+                  {unicornSwitchMode && isSelectedForUnicorn && (
+                    <div style={{ position: 'absolute', inset: -3, borderRadius: '50%', border: '2px solid #A78BFA', boxShadow: '0 0 10px rgba(167,139,250,0.75)' }} />
                   )}
                 </div>
               )}
