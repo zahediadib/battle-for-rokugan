@@ -60,7 +60,14 @@ export function CombatToken({ token, color, faceUp, size, style, className }) {
     <img
       src={src}
       alt={faceUp ? `${token.type} ${token.strength}` : 'hidden'}
-      style={{ width: size, height: size, borderRadius: '50%', ...style }}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: '50%',
+        border: `2px solid ${hex}`,
+        boxShadow: `0 0 ${Math.max(size * 0.12, 5)}px ${hex}66`,
+        ...style,
+      }}
       className={className}
       onError={() => setImgError(true)}
       draggable={false}
@@ -99,7 +106,14 @@ export function ControlToken({ ct, players, size, style }) {
     <img
       src={src}
       alt={`${player?.clan || 'Unknown'} control`}
-      style={{ width: size, height: size, borderRadius: '3px', ...style }}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: '3px',
+        border: `2px solid ${hex}`,
+        boxShadow: `0 0 ${Math.max(size * 0.12, 5)}px ${hex}99`,
+        ...style,
+      }}
       onError={() => setImgError(true)}
       draggable={false}
     />
@@ -137,7 +151,14 @@ export function SpecialToken({ type, size, style }) {
   return (
     <img
       src={src} alt={type}
-      style={{ width: size, height: size, borderRadius: '3px', ...style }}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: '3px',
+        border: `2px solid ${hex}`,
+        boxShadow: `0 0 ${Math.max(size * 0.12, 5)}px ${hex}88`,
+        ...style,
+      }}
       onError={() => setImgError(true)}
       draggable={false}
     />

@@ -36,7 +36,7 @@ export default function ProvinceInfoPopup({ provinceId, gameState, onClose }) {
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center" onClick={onClose} data-testid="province-info-popup">
       <div className="absolute inset-0 bg-black/50" />
-      <div className="relative z-10 glass-panel rounded-sm p-5 max-w-sm w-full animate-scale-in" onClick={e => e.stopPropagation()}>
+      <div className="relative z-10 glass-panel rounded-sm p-5 max-w-sm w-full animate-modal-in" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-heading text-xl font-bold text-[#D4AF37]">{provData.name}</h3>

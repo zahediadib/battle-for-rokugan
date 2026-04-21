@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Crown, MapPin, Star, Shield, Eye, ChevronRight, Scroll, Search, Flame, SkipForward, XCircle, FastForward, Settings } from 'lucide-react';
+import { Crown, MapPin, Star, Shield, Eye, ChevronRight, Scroll, Search, Flame, SkipForward, XCircle, FastForward, Settings, Info } from 'lucide-react';
 import { ScrollArea } from '../../components/ui/scroll-area';
 import { CLANS, TERRITORY_LABELS } from '../../constants/gameConstants';
 
@@ -14,6 +14,7 @@ export default function StatusPanel({
   const [showLog, setShowLog] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [showFinalScores, setShowFinalScores] = useState(false);
+  const [territoryInfo, setTerritoryInfo] = useState(null);
 
   const isResolution = gameState.phase === 'resolution';
   const canProceed = isHost && isResolution;
@@ -262,6 +263,16 @@ export default function StatusPanel({
                     {isOwner && terr.card && !terr.card_used && (
                       <div className="mt-1 text-[10px] text-[#D4AF37]">{terr.card.name}</div>
                     )}
+                    {terr.card && (isOwner || terr.card_used) && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setTerritoryInfo({ tid, terr }); }}
+                        className="mt-1 inline-flex items-center gap-1 text-[9px] text-[#60A5FA] hover:text-[#93C5FD] font-bold uppercase tracking-wider"
+                        data-testid={`territory-card-info-${tid}`}
+                      >
+                        <Info className="w-3 h-3" /> Info
+                      </button>
+                    )}
                     {canPlay && (
                       <div className="mt-1 text-[9px] text-[#C41E3A] font-bold uppercase tracking-wider animate-pulse">Play Card</div>
                     )}
@@ -332,6 +343,20 @@ export default function StatusPanel({
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      )}
+
+      {territoryInfo?.terr?.card && (
+        <div className="fixed inset-0 z-[98] flex items-center justify-center" onClick={() => setTerritoryInfo(null)} data-testid="territory-info-modal">
+          <div className="absolute inset-0 bg-black/65" />
+          <div className="relative z-10 glass-panel rounded-sm p-5 w-full max-w-md mx-4 animate-modal-in" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-heading text-xl font-bold text-[#D4AF37]">{territoryInfo.terr.card.name}</h3>
+              <button className="text-[#A1A1AA] hover:text-white text-sm" onClick={() => setTerritoryInfo(null)}>Close</button>
+            </div>
+            <p className="text-sm text-[#F5F5F0] mb-2">{territoryInfo.terr.card.description}</p>
+            <p className="text-xs text-[#A1A1AA]">{TERRITORY_LABELS[territoryInfo.tid] || territoryInfo.tid}</p>
           </div>
         </div>
       )}

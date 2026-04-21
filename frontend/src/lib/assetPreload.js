@@ -28,7 +28,19 @@ const COMBAT_TOKEN_FILES = [
 const CONTROL_TOKEN_FILES = ['front.png', 'back.png'];
 const SPECIAL_TOKEN_FILES = ['ScorchedEarth.png', 'Battlefield.png', 'Shrine.png', 'Peace.png', 'Harbor.png'];
 const BONUS_TOKEN_FILES = ['defense1.png', 'defense2.png', 'honor1.png', 'honor2.png', 'honor4.png'];
-const BASE_ASSETS = ['/assets/board.png', '/assets/music.mp3', '/assets/shugenja.png', '/assets/scout.png', '/assets/scorpion.png'];
+const BASE_ASSETS = [
+  '/assets/board.png',
+  '/assets/music.mp3',
+  '/assets/shugenja.png',
+  '/assets/scout.png',
+  '/assets/scorpion.png',
+  '/assets/control_token_placement.mp3',
+  '/assets/combat_token_placement.mp3',
+  '/assets/unicorn_switch.mp3',
+  '/assets/scout.mp3',
+  '/assets/shugenja.mp3',
+  '/assets/spy.mp3',
+];
 
 function getAssetUrls() {
   const colorFolders = [...new Set(Object.values(CLANS).map(clan => clan.assetFolder))];
