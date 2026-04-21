@@ -1331,6 +1331,8 @@ def process_unicorn_ability(game, player_idx, action):
     if not token1 or not token2:
         if token1:
             _place_unicorn_token(game, token1, loc1)
+        if token2:
+            _place_unicorn_token(game, token2, loc2)
         return False, "Could not find your tokens at those locations", game
 
     # Place them swapped

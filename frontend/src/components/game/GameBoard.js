@@ -150,7 +150,7 @@ export default function GameBoard({
 
   return (
     <div ref={containerRef} className="flex-1 overflow-auto flex items-center justify-center bg-[#0A0A0A] relative select-none" data-testid="game-board">
-      <div style={{ width: s(BOARD_W), height: s(BOARD_H), position: 'relative', userSelect: 'none' }} className="shrink-0">
+      <div style={{ width: s(BOARD_W), height: s(BOARD_H), position: 'relative' }} className="shrink-0">
         <img src="/assets/board.png" alt="Battle Map" style={{ width: '100%', height: '100%' }} className="select-none pointer-events-none" draggable={false} />
 
         {/* Provinces */}
