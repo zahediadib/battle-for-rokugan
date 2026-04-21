@@ -281,13 +281,9 @@ def process_place_control_token(game, player_idx, action):
         return False, "No setup tokens remaining", game
 
     province = game["provinces"][province_id]
-    # Can place in any empty province (no control tokens from other players)
-    # Actually: any empty province including capitals, shadowlands
-    # Province is "empty" if no one controls it OR we can still place here
-    # Rule: place in any empty province. An empty province has no control tokens.
-    has_other_tokens = any(ct["player_index"] != player_idx for ct in province["control_tokens"])
-    if has_other_tokens:
-        return False, "Province has another player's tokens", game
+    # Setup rule: token can only be placed in an empty province.
+    if province["control_tokens"]:
+        return False, "Province is not empty", game
 
     # Place control token
     province["control_tokens"].append({

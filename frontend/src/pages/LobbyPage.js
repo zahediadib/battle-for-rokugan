@@ -30,6 +30,19 @@ export default function LobbyPage() {
     return () => clearInterval(interval);
   }, [loadRooms]);
 
+  useEffect(() => {
+    if (!user?.user_id) return;
+    const activeMyRoom = rooms.find(
+      room =>
+        room.status === 'playing' &&
+        room.game_id &&
+        room.players?.some(p => p.user_id === user?.user_id)
+    );
+    if (activeMyRoom) {
+      navigate(`/game/${activeMyRoom.game_id}`);
+    }
+  }, [rooms, user?.user_id, navigate]);
+
   const createRoom = async () => {
     if (!roomName.trim()) return;
     setLoading(true);
